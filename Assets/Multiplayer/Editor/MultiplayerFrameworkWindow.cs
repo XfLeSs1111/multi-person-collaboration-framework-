@@ -29,7 +29,7 @@ namespace Socket.Multiplayer.Editor
 
             EditorGUILayout.Space(8f);
             EditorGUILayout.LabelField("Scene Contract", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("1. Bootstrap: SocketNetworkManager + KcpTransport + NetworkStartup");
+            EditorGUILayout.LabelField("1. Bootstrap: SocketRoomManager + KcpTransport + NetworkStartup");
             EditorGUILayout.LabelField("2. Player Prefab: NetworkIdentity + NetworkPlayer + LocalPlayerInput");
             EditorGUILayout.LabelField("3. Lobby Canvas: SessionOperations + RoomOperations");
             EditorGUILayout.LabelField("4. Build Settings: lobby and gameplay scenes included");

@@ -17,7 +17,7 @@ namespace Socket.Multiplayer
         public RoomPhase Phase => phase;
 
         [Server]
-        public void ServerRefresh(SocketNetworkManager manager)
+        public void ServerRefresh(SocketRoomManager manager)
         {
             if (manager == null) return;
             roomName = manager.RoomName;

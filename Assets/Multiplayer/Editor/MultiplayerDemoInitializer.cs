@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace Socket.Multiplayer.Editor
 {
@@ -25,20 +24,49 @@ namespace Socket.Multiplayer.Editor
             EnsureFolder(SceneRoot);
 
             var config = CreateConfig();
-            var playerPrefab = CreatePlayerPrefab(config);
+            var playerPrefab = CreatePlayerPrefab();
+            var roomPlayerPrefab = CreateRoomPlayerPrefab();
             var interactablePrefab = CreateInteractablePrefab(config);
             var roomStatePrefab = CreateSimpleNetworkPrefab<NetworkRoomState>("NetworkRoomState");
             var roomChatPrefab = CreateSimpleNetworkPrefab<NetworkRoomChat>("NetworkRoomChat");
 
-            var bootstrap = CreateBootstrapScene(config, playerPrefab, roomStatePrefab, roomChatPrefab);
+            var bootstrap = CreateBootstrapScene(config, roomPlayerPrefab, playerPrefab, roomStatePrefab, roomChatPrefab);
             var lobby = CreateLobbyScene(config, interactablePrefab);
             var game = CreateGameScene(config, playerPrefab, interactablePrefab);
             ConfigureBuildSettings(bootstrap, lobby, game);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            EditorSceneManager.OpenScene(lobby, OpenSceneMode.Single);
-            Debug.Log("Socket PC multiplayer demo initialized. Open Assets/MultiplayerGenerated/Scenes/Lobby.unity and press Play.");
+            // Bootstrap is the playable entry scene: it holds the DontDestroyOnLoad
+            // SocketRoomManager + HUD, and Host switches into the Lobby (onlineScene).
+            EditorSceneManager.OpenScene(bootstrap, OpenSceneMode.Single);
+            Debug.Log("Socket PC multiplayer demo initialized. Open Assets/MultiplayerGenerated/Scenes/Bootstrap.unity and press Play, then click Host.");
+        }
+
+        // Regenerate deletes the generated root and rebuilds everything from current code.
+        // Initialize() itself stays idempotent ("skip if exists") so manual edits to generated
+        // assets are not clobbered by a plain re-run; use Regenerate only when the generator changed.
+        [MenuItem("Socket/Multiplayer/Regenerate Demo")]
+        public static void Regenerate()
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Regenerate Demo",
+                    $"This will delete {Root} and rebuild config, prefabs and scenes from current code.\n\nContinue?",
+                    "Yes, Regenerate",
+                    "Cancel"))
+                return;
+
+            AssetDatabase.DeleteAsset(Root);
+            Initialize();
+        }
+
+        // Headless entry point for CI / batchmode rebuild of the generated demo tree.
+        // (Regenerate() shows a confirmation dialog which auto-cancels under -batchmode.)
+        public static void RunRegenerateBatch()
+        {
+            AssetDatabase.DeleteAsset(Root);
+            Initialize();
+            EditorApplication.Exit(0);
         }
 
         private static MultiplayerConfig CreateConfig()
@@ -61,12 +89,14 @@ namespace Socket.Multiplayer.Editor
             config.lobbyScene = "Assets/MultiplayerGenerated/Scenes/Lobby.unity";
             config.gameplayScene = "Assets/MultiplayerGenerated/Scenes/Game.unity";
             config.autoStartWhenAllReady = false;
-            config.allowLateJoiners = true;
+            // NetworkRoomManager's OnServerConnect kicks any connection while the active
+            // scene is not the RoomScene, so late joining mid-game is not supported yet (P2).
+            config.allowLateJoiners = false;
             EditorUtility.SetDirty(config);
             return config;
         }
 
-        private static GameObject CreatePlayerPrefab(MultiplayerConfig config)
+        private static GameObject CreatePlayerPrefab()
         {
             var path = PrefabRoot + "/Player.prefab";
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -90,10 +120,23 @@ namespace Socket.Multiplayer.Editor
 
             var player = root.GetComponent<NetworkPlayer>();
             var playerSerialized = new SerializedObject(player);
-            playerSerialized.FindProperty("config").objectReferenceValue = config;
             playerSerialized.FindProperty("characterController").objectReferenceValue = controller;
             playerSerialized.ApplyModifiedPropertiesWithoutUndo();
 
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+            return prefab;
+        }
+
+        private static GameObject CreateRoomPlayerPrefab()
+        {
+            var path = PrefabRoot + "/RoomPlayer.prefab";
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+
+            var root = new GameObject("RoomPlayer");
+            root.AddComponent<NetworkIdentity>();
+            root.AddComponent<SocketRoomPlayer>();
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
             return prefab;
@@ -132,28 +175,35 @@ namespace Socket.Multiplayer.Editor
             return prefab;
         }
 
-        private static string CreateBootstrapScene(MultiplayerConfig config, GameObject player, GameObject state, GameObject chat)
+        private static string CreateBootstrapScene(MultiplayerConfig config, GameObject roomPlayer, GameObject player, GameObject state, GameObject chat)
         {
             var path = SceneRoot + "/Bootstrap.unity";
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            var managerObject = new GameObject("SocketNetworkManager");
-            var manager = managerObject.AddComponent<SocketNetworkManager>();
+            var managerObject = new GameObject("SocketRoomManager");
+            var manager = managerObject.AddComponent<SocketRoomManager>();
             managerObject.AddComponent<kcp2k.KcpTransport>();
             managerObject.AddComponent<NetworkStartup>();
             managerObject.AddComponent<UniqueNameAuthenticator>();
             managerObject.AddComponent<SessionOperations>();
             managerObject.AddComponent<PcRoomHud>();
+            // RoomOperations must live on the DontDestroyOnLoad manager object: the HUD
+            // dispatches Ready/Start/Lobby through it, and it must be reachable in both
+            // the Lobby scene AND the Game scene (Lobby-return). A Lobby-scene object is
+            // destroyed when the scene changes, which would silently kill the buttons.
+            managerObject.AddComponent<RoomOperations>();
             var managerSerialized = new SerializedObject(manager);
             managerSerialized.FindProperty("config").objectReferenceValue = config;
-            managerSerialized.FindProperty("playerPrefabOverride").objectReferenceValue = player.GetComponent<NetworkPlayer>();
             managerSerialized.FindProperty("roomStatePrefab").objectReferenceValue = state.GetComponent<NetworkRoomState>();
             managerSerialized.FindProperty("roomChatPrefab").objectReferenceValue = chat.GetComponent<NetworkRoomChat>();
             managerSerialized.ApplyModifiedPropertiesWithoutUndo();
+            manager.roomPlayerPrefab = roomPlayer.GetComponent<SocketRoomPlayer>();
             manager.playerPrefab = player;
-            manager.spawnPrefabs = new List<GameObject> { player, state.gameObject, chat.gameObject };
+            manager.spawnPrefabs = new List<GameObject> { roomPlayer, player, state.gameObject, chat.gameObject };
             manager.authenticator = managerObject.GetComponent<UniqueNameAuthenticator>();
             manager.offlineScene = config.offlineScene;
             manager.onlineScene = config.lobbyScene;
+            manager.RoomScene = config.lobbyScene;
+            manager.GameplayScene = config.gameplayScene;
             EditorSceneManager.SaveScene(scene, path);
             return path;
         }
@@ -164,12 +214,11 @@ namespace Socket.Multiplayer.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             CreateFloor();
             CreateStartPositions(4);
-            var manager = new GameObject("LobbyRoom");
-            manager.AddComponent<RoomOperations>();
-            manager.AddComponent<RoomStatusPanel>();
-            manager.AddComponent<SessionOperations>();
-            manager.AddComponent<RoomChatPanel>();
-            CreateCanvas();
+            // RoomOperations is NOT generated here: it lives on the DontDestroyOnLoad
+            // manager object in Bootstrap so the HUD can reach it in every scene.
+            // RoomStatusPanel/RoomChatPanel/SessionOperations/Canvas are also not generated:
+            // the IMGUI PcRoomHud (carried by the DontDestroyOnLoad manager object) is the UI,
+            // and adding empty uGUI shells produced only duplicated/stale panels in the past.
             EditorSceneManager.SaveScene(scene, path);
             return path;
         }
@@ -204,14 +253,6 @@ namespace Socket.Multiplayer.Editor
                 start.AddComponent<NetworkStartPosition>();
                 start.transform.position = new Vector3((i % 4) * 2f - 3f, 0f, (i / 4) * 2f);
             }
-        }
-
-        private static void CreateCanvas()
-        {
-            var canvas = new GameObject("RoomCanvas");
-            canvas.AddComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.AddComponent<CanvasScaler>();
-            canvas.AddComponent<GraphicRaycaster>();
         }
 
         private static void ConfigureBuildSettings(params string[] scenes)

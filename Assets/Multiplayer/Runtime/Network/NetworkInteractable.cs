@@ -18,7 +18,7 @@ namespace Socket.Multiplayer
         [Server]
         public void ServerTryAcquire(NetworkPlayer requester)
         {
-            var manager = NetworkManager.singleton as SocketNetworkManager;
+            var manager = NetworkManager.singleton as SocketRoomManager;
             var range = manager != null && manager.Config != null ? manager.Config.interactionRange : 3f;
             var lease = manager != null && manager.Config != null ? manager.Config.interactionLeaseSeconds : 10f;
             var distance = Vector3.Distance(requester.transform.position, transform.position);
@@ -70,7 +70,7 @@ namespace Socket.Multiplayer
         public override void OnStartServer()
         {
             base.OnStartServer();
-            if (config == null && NetworkManager.singleton is SocketNetworkManager manager)
+            if (config == null && NetworkManager.singleton is SocketRoomManager manager)
                 config = manager.Config;
             activeState = true;
             toggled = false;

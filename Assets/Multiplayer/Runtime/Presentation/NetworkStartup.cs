@@ -5,12 +5,12 @@ namespace Socket.Multiplayer
 {
     public sealed class NetworkStartup : MonoBehaviour
     {
-        [SerializeField] private SocketNetworkManager networkManager;
+        [SerializeField] private SocketRoomManager networkManager;
         [SerializeField] private UniqueNameAuthenticator nameAuthenticator;
 
         private void Start()
         {
-            if (networkManager == null) networkManager = FindFirstObjectByType<SocketNetworkManager>();
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
             if (networkManager == null) return;
 
             var args = System.Environment.GetCommandLineArgs();

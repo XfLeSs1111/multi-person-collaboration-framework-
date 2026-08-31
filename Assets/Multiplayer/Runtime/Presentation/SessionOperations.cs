@@ -6,14 +6,14 @@ namespace Socket.Multiplayer
 {
     public sealed class SessionOperations : MonoBehaviour
     {
-        [SerializeField] private SocketNetworkManager networkManager;
+        [SerializeField] private SocketRoomManager networkManager;
         [SerializeField] private UniqueNameAuthenticator nameAuthenticator;
         [SerializeField] private string serverAddress = "localhost";
         [SerializeField] private string playerName = "Player";
 
         private void Awake()
         {
-            if (networkManager == null) networkManager = FindFirstObjectByType<SocketNetworkManager>();
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
             if (nameAuthenticator == null) nameAuthenticator = FindFirstObjectByType<UniqueNameAuthenticator>();
         }
 

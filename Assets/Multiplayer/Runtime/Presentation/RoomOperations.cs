@@ -7,33 +7,38 @@ namespace Socket.Multiplayer
     {
         public void ToggleReady()
         {
-            var player = GetLocalPlayer();
-            if (player != null) player.SubmitReady(!player.IsReady);
+            var rp = GetLocalRoomPlayer();
+            if (rp != null) rp.CmdChangeReadyState(!rp.readyToBegin);
         }
 
         public void SetReady(bool value)
         {
-            var player = GetLocalPlayer();
-            if (player != null) player.SubmitReady(value);
+            var rp = GetLocalRoomPlayer();
+            if (rp != null) rp.CmdChangeReadyState(value);
         }
 
         public void StartGame()
         {
-            var player = GetLocalPlayer();
-            if (player != null && player.isLocalPlayer) player.CmdRequestStartGame();
+            var local = NetworkClient.localPlayer;
+            if (local != null && local.TryGetComponent<SocketRoomPlayer>(out var rp)) rp.CmdRequestStartGame();
+            else if (local != null && local.TryGetComponent<NetworkPlayer>(out var gp)) gp.CmdRequestStartGame();
         }
 
         public void ReturnToLobby()
         {
-            if (NetworkServer.active && NetworkManager.singleton is SocketNetworkManager manager)
-                manager.ServerReturnToLobby();
-            else if (NetworkClient.active && NetworkClient.localPlayer != null)
-                NetworkClient.localPlayer.GetComponent<NetworkPlayer>()?.CmdRequestReturnToLobby();
+            // Route through the client command even for host (host is also a client in Mirror),
+            // so the server-side leader/phase validation in ServerReturnToLobby is always enforced.
+            var local = NetworkClient.localPlayer;
+            if (local != null && local.TryGetComponent<SocketRoomPlayer>(out var rp)) rp.CmdRequestReturnToLobby();
+            else if (local != null && local.TryGetComponent<NetworkPlayer>(out var gp)) gp.CmdRequestReturnToLobby();
         }
 
-        private static NetworkPlayer GetLocalPlayer()
+        private static SocketRoomPlayer GetLocalRoomPlayer()
         {
-            return NetworkClient.localPlayer == null ? null : NetworkClient.localPlayer.GetComponent<NetworkPlayer>();
+            return NetworkClient.localPlayer != null &&
+                   NetworkClient.localPlayer.TryGetComponent<SocketRoomPlayer>(out var rp)
+                ? rp
+                : null;
         }
     }
 }

@@ -24,7 +24,7 @@ MonoBehaviour:
   lobbyScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
   gameplayScene: Assets/MultiplayerGenerated/Scenes/Game.unity
   autoStartWhenAllReady: 0
-  allowLateJoiners: 1
+  allowLateJoiners: 0
   moveSpeed: 4
   inputSendRate: 20
   spawnSpacing: 2

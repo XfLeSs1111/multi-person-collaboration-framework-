@@ -16,12 +16,23 @@ namespace Socket.Multiplayer
 
         private void Awake()
         {
+            // Guard against duplicate HUDs (e.g. stale copies left in a scene by an older generator).
+            if (FindObjectsByType<PcRoomHud>(FindObjectsSortMode.None).Length > 1)
+            {
+                Destroy(gameObject);
+                return;
+            }
             if (session == null) session = FindFirstObjectByType<SessionOperations>();
             if (room == null) room = FindFirstObjectByType<RoomOperations>();
         }
 
         private void OnGUI()
         {
+            // Re-resolve every frame: the HUD is on the DontDestroyOnLoad manager object,
+            // so its references survive scene changes (Unity's == treats a destroyed object
+            // as null, which re-triggers the lookup). room is generated onto the manager
+            // object, but this keeps the HUD working for manual setups that add it later.
+            if (room == null) room = FindFirstObjectByType<RoomOperations>();
             if (chat == null) chat = FindFirstObjectByType<NetworkRoomChat>();
             GUILayout.BeginArea(new Rect(16f, 16f, 420f, Screen.height - 32f), GUI.skin.window);
             GUILayout.Label("Socket PC Multiplayer");
@@ -33,15 +44,16 @@ namespace Socket.Multiplayer
             if (GUILayout.Button("Stop")) session?.StopSession();
             GUILayout.EndHorizontal();
 
-            var manager = NetworkManager.singleton as SocketNetworkManager;
-            var local = NetworkClient.localPlayer == null ? null : NetworkClient.localPlayer.GetComponent<NetworkPlayer>();
+            var manager = NetworkManager.singleton as SocketRoomManager;
+            var roomPlayer = NetworkClient.localPlayer == null ? null : NetworkClient.localPlayer.GetComponent<SocketRoomPlayer>();
+            var isReady = roomPlayer != null && roomPlayer.readyToBegin;
             if (manager != null && (NetworkClient.active || NetworkServer.active))
             {
                 GUILayout.Space(8f);
                 GUILayout.Label($"Room: {manager.RoomName}  {manager.ConnectedPlayerCount}/{manager.Config?.maxPlayers ?? manager.maxConnections}");
                 GUILayout.Label($"Mode: {manager.CurrentPhase}");
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(local != null && local.IsReady ? "Unready" : "Ready")) room?.ToggleReady();
+                if (GUILayout.Button(isReady ? "Unready" : "Ready")) room?.ToggleReady();
                 if (GUILayout.Button("Start")) room?.StartGame();
                 if (GUILayout.Button("Lobby")) room?.ReturnToLobby();
                 GUILayout.EndHorizontal();

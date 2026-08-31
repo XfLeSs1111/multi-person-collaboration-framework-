@@ -26,6 +26,7 @@ namespace Socket.Multiplayer
         public string lobbyScene = "SampleScene";
         public string gameplayScene = "SampleScene";
         public bool autoStartWhenAllReady;
+        [Tooltip("Reserved for P2 late-join support. NetworkRoomManager currently rejects any connection while the active scene is not the lobby, so this has no effect yet.")]
         public bool allowLateJoiners;
 
         [Header("Player")]

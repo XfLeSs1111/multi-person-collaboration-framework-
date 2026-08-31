@@ -42,7 +42,7 @@ namespace Socket.Multiplayer
             public RoomPhase phase;
         }
 
-        [SerializeField] private SocketNetworkManager networkManager;
+        [SerializeField] private SocketRoomManager networkManager;
         [SerializeField] private string requestedRoom;
         [SerializeField] private SocketRoomFoundEvent onRoomFound = new SocketRoomFoundEvent();
         private readonly Dictionary<long, string> _lastResponses = new Dictionary<long, string>();
@@ -51,7 +51,7 @@ namespace Socket.Multiplayer
 
         private void Awake()
         {
-            if (networkManager == null) networkManager = FindFirstObjectByType<SocketNetworkManager>();
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
             if (transport == null) transport = Transport.active;
         }
 
@@ -59,7 +59,7 @@ namespace Socket.Multiplayer
 
         protected override Response ProcessRequest(Request request, IPEndPoint endpoint)
         {
-            if (networkManager == null) networkManager = FindFirstObjectByType<SocketNetworkManager>();
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
             if (networkManager == null) return default;
             return new Response
             {

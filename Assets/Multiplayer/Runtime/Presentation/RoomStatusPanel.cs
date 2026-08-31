@@ -7,7 +7,7 @@ namespace Socket.Multiplayer
 {
     public sealed class RoomStatusPanel : MonoBehaviour
     {
-        [SerializeField] private SocketNetworkManager networkManager;
+        [SerializeField] private SocketRoomManager networkManager;
         [SerializeField] private Text roomText;
         [SerializeField] private Text playersText;
         [SerializeField] private Text phaseText;
@@ -17,7 +17,7 @@ namespace Socket.Multiplayer
 
         private void Awake()
         {
-            if (networkManager == null) networkManager = FindFirstObjectByType<SocketNetworkManager>();
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
             if (roomState == null) roomState = FindFirstObjectByType<NetworkRoomState>();
         }
 
@@ -30,13 +30,21 @@ namespace Socket.Multiplayer
             if (phaseText != null) phaseText.text = (roomState == null ? networkManager.CurrentPhase : roomState.Phase).ToString();
             if (playersText == null) return;
 
-            var players = FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None);
+            // Lobby roster comes from the room players; the game roster from the game players.
             var builder = new StringBuilder();
             var count = roomState == null ? networkManager.ConnectedPlayerCount : roomState.PlayerCount;
             var max = roomState == null ? (networkManager.Config == null ? networkManager.maxConnections : networkManager.Config.maxPlayers) : roomState.MaxPlayers;
             builder.Append(count).Append('/').Append(max);
-            foreach (var player in players)
-                builder.AppendLine().Append(player.IsLeader ? "[Leader] " : string.Empty).Append(player.displayName).Append(player.IsReady ? "  Ready" : "  Not Ready");
+            if (networkManager.CurrentPhase != RoomPhase.InGame)
+            {
+                foreach (var player in FindObjectsByType<SocketRoomPlayer>(FindObjectsSortMode.None))
+                    builder.AppendLine().Append(player.IsLeader ? "[Leader] " : string.Empty).Append(player.DisplayName).Append(player.readyToBegin ? "  Ready" : "  Not Ready");
+            }
+            else
+            {
+                foreach (var player in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
+                    builder.AppendLine().Append(player.IsLeader ? "[Leader] " : string.Empty).Append(player.displayName);
+            }
             playersText.text = builder.ToString();
         }
     }

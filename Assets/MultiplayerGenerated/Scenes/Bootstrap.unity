@@ -123,7 +123,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1720172486
+--- !u!1 &2068895221
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -131,27 +131,40 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1720172493}
-  - component: {fileID: 1720172492}
-  - component: {fileID: 1720172491}
-  - component: {fileID: 1720172490}
-  - component: {fileID: 1720172489}
-  - component: {fileID: 1720172488}
-  - component: {fileID: 1720172487}
+  - component: {fileID: 2068895229}
+  - component: {fileID: 2068895228}
+  - component: {fileID: 2068895227}
+  - component: {fileID: 2068895226}
+  - component: {fileID: 2068895225}
+  - component: {fileID: 2068895224}
+  - component: {fileID: 2068895223}
+  - component: {fileID: 2068895222}
   m_Layer: 0
-  m_Name: SocketNetworkManager
+  m_Name: SocketRoomManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1720172487
+--- !u!114 &2068895222
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 439f8871048b3df4084e230693dc3ae3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2068895223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 547111041cdaa1c4d8071c96856814c5, type: 3}
@@ -160,13 +173,13 @@ MonoBehaviour:
   session: {fileID: 0}
   room: {fileID: 0}
   chat: {fileID: 0}
---- !u!114 &1720172488
+--- !u!114 &2068895224
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 307ee40083f856a469a05c7f8afce2a3, type: 3}
@@ -176,13 +189,13 @@ MonoBehaviour:
   nameAuthenticator: {fileID: 0}
   serverAddress: localhost
   playerName: Player
---- !u!114 &1720172489
+--- !u!114 &2068895225
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 549a98e73f2822c429a2936309444fbb, type: 3}
@@ -201,13 +214,13 @@ MonoBehaviour:
   OnAuthFailure:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &1720172490
+--- !u!114 &2068895226
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 52498a2ec5725e84f9060221f740815b, type: 3}
@@ -215,13 +228,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   networkManager: {fileID: 0}
   nameAuthenticator: {fileID: 0}
---- !u!114 &1720172491
+--- !u!114 &2068895227
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b0fecffa3f624585964b0d0eb21b18e, type: 3}
@@ -244,16 +257,16 @@ MonoBehaviour:
   debugLog: 0
   statisticsGUI: 0
   statisticsLog: 0
---- !u!114 &1720172492
+--- !u!114 &2068895228
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 71a064f635aea554c805c10fd4852cac, type: 3}
+  m_Script: {fileID: 11500000, guid: 71d87fb85f7e2fc4980bf41e39570707, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   dontDestroyOnLoad: 1
@@ -269,17 +282,18 @@ MonoBehaviour:
   disconnectInactiveConnections: 0
   disconnectInactiveTimeout: 60
   exceptionsDisconnect: 1
-  authenticator: {fileID: 1720172489}
+  authenticator: {fileID: 2068895225}
   offlineScene: Assets/MultiplayerGenerated/Scenes/Bootstrap.unity
   onlineScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
   offlineSceneLoadDelay: 0
-  playerPrefab: {fileID: 7587071992156473390, guid: 2ab3f15e75ae7cc45b9c9780fc5cc69a, type: 3}
+  playerPrefab: {fileID: 6051348722146983841, guid: d09a73b94dd8c574280d59cd6752aa13, type: 3}
   autoCreatePlayer: 1
   playerSpawnMethod: 0
   spawnPrefabs:
-  - {fileID: 7587071992156473390, guid: 2ab3f15e75ae7cc45b9c9780fc5cc69a, type: 3}
-  - {fileID: 7171517856296568771, guid: 51efe68bed07a124b902bbbf26f33832, type: 3}
-  - {fileID: 7935922025964432263, guid: e5518b1e70c84f7488961b863421cde3, type: 3}
+  - {fileID: 7472426216590386821, guid: 3867275048b1a53478b1a9526e5bb667, type: 3}
+  - {fileID: 6051348722146983841, guid: d09a73b94dd8c574280d59cd6752aa13, type: 3}
+  - {fileID: 8897126893482725110, guid: e7839d8e2f03c344c907970a70251422, type: 3}
+  - {fileID: 868087849485480107, guid: 7a1cfb33976284543a5e5d2735ffaa1a, type: 3}
   snapshotSettings:
     bufferTimeMultiplier: 2
     bufferLimit: 32
@@ -294,17 +308,23 @@ MonoBehaviour:
   evaluationMethod: 0
   evaluationInterval: 3
   timeInterpolationGui: 0
+  showRoomGUI: 1
+  minPlayers: 1
+  roomPlayerPrefab: {fileID: 8075451950297404504, guid: 3867275048b1a53478b1a9526e5bb667, type: 3}
+  RoomScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
+  GameplayScene: Assets/MultiplayerGenerated/Scenes/Game.unity
+  _allPlayersReady: 0
+  clientIndex: 0
   config: {fileID: 11400000, guid: e74151af71c45a544a8ab2f2aa26259e, type: 2}
-  playerPrefabOverride: {fileID: 2575195269336318909, guid: 2ab3f15e75ae7cc45b9c9780fc5cc69a, type: 3}
-  roomStatePrefab: {fileID: 6374985499075063174, guid: 51efe68bed07a124b902bbbf26f33832, type: 3}
-  roomChatPrefab: {fileID: 6055179169746422671, guid: e5518b1e70c84f7488961b863421cde3, type: 3}
---- !u!4 &1720172493
+  roomStatePrefab: {fileID: 7061398708069937591, guid: e7839d8e2f03c344c907970a70251422, type: 3}
+  roomChatPrefab: {fileID: 4828529644680052002, guid: 7a1cfb33976284543a5e5d2735ffaa1a, type: 3}
+--- !u!4 &2068895229
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1720172486}
+  m_GameObject: {fileID: 2068895221}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -317,4 +337,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1720172493}
+  - {fileID: 2068895229}

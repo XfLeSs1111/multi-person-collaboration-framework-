@@ -16,7 +16,7 @@ namespace Socket.Multiplayer
             if (player == null || !player.isLocalPlayer) return;
             var input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             player.SubmitInput(input);
-            if (Input.GetKeyDown(KeyCode.R)) player.SubmitReady(!player.IsReady);
+            // R-key Ready lives on SocketRoomPlayer (lobby player); the game player has no Ready state.
         }
     }
 }
