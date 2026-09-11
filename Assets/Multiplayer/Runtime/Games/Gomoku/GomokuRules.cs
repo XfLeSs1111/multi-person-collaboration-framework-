@@ -10,10 +10,10 @@ namespace Socket.Multiplayer
 
         public MatchCommandResult<GomokuEvent> TryApply(GomokuState state, MatchParticipant actor, PlaceStoneCommand command)
         {
-            if (state == null || actor == null) return MatchCommandResult<GomokuEvent>.Reject("Match state is invalid.");
-            if (state.Result != GomokuResult.None) return MatchCommandResult<GomokuEvent>.Reject("Match has already ended.");
-            if (actor.SeatIndex != state.CurrentSeat) return MatchCommandResult<GomokuEvent>.Reject("It is not this player's turn.");
-            if (actor.SeatIndex < 0 || actor.SeatIndex > 1) return MatchCommandResult<GomokuEvent>.Reject("Player seat is invalid.");
+            if (state == null || actor == null) return MatchCommandResult<GomokuEvent>.Reject(MatchRejectReason.InvalidCommand, "Match state is invalid.");
+            if (state.Result != GomokuResult.None) return MatchCommandResult<GomokuEvent>.Reject(MatchRejectReason.NotActive, "Match has already ended.");
+            if (actor.SeatIndex != state.CurrentSeat) return MatchCommandResult<GomokuEvent>.Reject(MatchRejectReason.NotYourTurn, "It is not this player's turn.");
+            if (actor.SeatIndex < 0 || actor.SeatIndex > 1) return MatchCommandResult<GomokuEvent>.Reject(MatchRejectReason.InvalidCommand, "Player seat is invalid.");
             if (command.CellIndex < 0 || command.CellIndex >= state.CellCount) return MatchCommandResult<GomokuEvent>.Reject("Cell is outside the board.");
             if (state.GetCell(command.CellIndex) != GomokuCell.Empty) return MatchCommandResult<GomokuEvent>.Reject("Cell is already occupied.");
 

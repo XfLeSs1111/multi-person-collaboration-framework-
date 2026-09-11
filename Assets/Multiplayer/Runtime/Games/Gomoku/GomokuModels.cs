@@ -59,6 +59,10 @@ namespace Socket.Multiplayer
         public GomokuResult Result { get; private set; }
         public int CellCount => cells.Length;
 
+        /// <summary>Index of the latest stone, -1 before the first move. Drives the
+        /// "last move" marker in the board view.</summary>
+        public int LastCellIndex { get; private set; } = -1;
+
         public GomokuState(int boardSize)
         {
             if (boardSize < 1) throw new ArgumentOutOfRangeException(nameof(boardSize));
@@ -71,6 +75,7 @@ namespace Socket.Multiplayer
         internal void Place(int index, GomokuCell cell)
         {
             cells[index] = cell;
+            LastCellIndex = index;
             Turn++;
             CurrentSeat = CurrentSeat == 0 ? 1 : 0;
         }
@@ -84,6 +89,7 @@ namespace Socket.Multiplayer
             clone.Turn = Turn;
             clone.CurrentSeat = CurrentSeat;
             clone.Result = Result;
+            clone.LastCellIndex = LastCellIndex;
             return clone;
         }
     }
