@@ -29,6 +29,8 @@ namespace Socket.Multiplayer
         public MultiplayerErrorCode errorCode;
         public RoomInfo[] roomInfos;
         public PlayerInfo[] playerInfos;
+        // Finished-match history of the room this connection sits in (config-bounded).
+        public MatchRecordInfo[] matchRecords;
     }
 
     [Serializable]

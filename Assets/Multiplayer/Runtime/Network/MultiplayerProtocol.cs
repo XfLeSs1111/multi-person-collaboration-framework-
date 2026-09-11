@@ -5,10 +5,11 @@ namespace Socket.Multiplayer
     public static class MultiplayerProtocol
     {
         // Protocol version changelog (M3-S.6). Bump whenever NetworkMessage layouts change.
+        //   5 — added MatchRecordInfo[] to ClientRoomMessage (战绩/回放数据)
         //   4 — added MultiplayerErrorCode to ClientRoomMessage and AuthResponseMessage
         //   earlier revisions predate this changelog (room protocol, multi-room routing,
         //   auth handshake with protocol version + config signature)
-        public const ushort Version = 4;
+        public const ushort Version = 5;
 
         public static string GetConfigSignature(MultiplayerConfig config)
         {
@@ -29,6 +30,9 @@ namespace Socket.Multiplayer
             Add(ref hash, config.interactionRange.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.allowLateJoiners.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.autoStartWhenAllReady.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.turnTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.matchRecordLimit.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.recordReplays.ToString(CultureInfo.InvariantCulture));
 
             var template = config.defaultRoomTemplate;
             if (template != null)

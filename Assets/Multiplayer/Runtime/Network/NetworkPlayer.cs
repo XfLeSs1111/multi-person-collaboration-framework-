@@ -13,6 +13,9 @@ namespace Socket.Multiplayer
         [SyncVar] private bool ready;
         [SyncVar] private bool spectator;
         [SyncVar] private string roomIdText;
+        // Duel seat inside the room's match: 0 = black, 1 = white, -1 = none/spectator.
+        // Synced so the board UI can tell whose turn it is without guessing.
+        [SyncVar] private int seatIndex = -1;
         private Vector2 serverInput;
         private InputAdmission inputAdmission;
         private uint inputSequence;
@@ -25,6 +28,7 @@ namespace Socket.Multiplayer
         public bool IsLeader => leader;
         public bool IsReady => ready;
         public bool IsSpectator => spectator;
+        public int SeatIndex => seatIndex;
         public string StableId => connectionToClient == null ? string.Empty : connectionToClient.authenticationData as string;
         public Guid RoomId => Guid.TryParse(roomIdText, out var value) ? value : LobbyRoom.Id;
 
@@ -67,9 +71,15 @@ namespace Socket.Multiplayer
             leader = isLeader;
             ready = isReady;
             spectator = isSpectator;
+            // Only leaving for the lobby clears the duel seat: inside a room the match
+            // adapter owns it (ServerSetSeat), so repeated SyncPlayer calls cannot wipe it.
+            if (roomId == LobbyRoom.Id) seatIndex = -1;
             if (_networkMatch == null) _networkMatch = GetComponent<NetworkMatch>();
             if (_networkMatch != null) _networkMatch.matchId = roomId;
         }
+
+        [Server]
+        public void ServerSetSeat(int seat) => seatIndex = seat;
 
         [Server]
         public void ServerTeleport(Pose pose)

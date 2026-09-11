@@ -400,7 +400,14 @@ namespace Socket.Multiplayer
         /// Reverts an InGame room to Lobby when the match adapter failed to start,
         /// so the room does not stay stuck in InGame without a running match.
         /// </summary>
-        public bool RollbackStart(Guid roomId)
+        public bool RollbackStart(Guid roomId) => ResetToLobby(roomId);
+
+        /// <summary>
+        /// Puts an InGame room back in the lobby and clears every ready flag. Used both
+        /// by a failed start rollback and by "match finished — ready up for the next
+        /// one", so a completed game never leaves its room stuck InGame.
+        /// </summary>
+        public bool ResetToLobby(Guid roomId)
         {
             if (!_rooms.TryGetValue(roomId, out var room) || room.Phase != RoomPhase.InGame) return false;
             room.Phase = RoomPhase.Lobby;

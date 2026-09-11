@@ -34,7 +34,11 @@ namespace Socket.Multiplayer
         NotInRoom = 214,
         StartFailed = 215,
 
-        // 3xx/4xx — reserved for match-kernel and interaction rejections
+        // 3xx — match commands (落子/认输)。内核保持英文调试文本，客户端靠这些码
+        // 给出中文解释，不解析字符串。
+        NotYourTurn = 300,
+        InvalidMatchCommand = 301,
+        MatchNotRunning = 302,
 
         // 9xx — traffic control
         RateLimited = 900,

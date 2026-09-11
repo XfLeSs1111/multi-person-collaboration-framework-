@@ -19,6 +19,10 @@ namespace Socket.Multiplayer
 
         public Guid MatchId { get; }
         public MatchPhase Phase { get; private set; }
+        /// <summary>Why the match left the Active phase; None while waiting/active.</summary>
+        public MatchEndReason EndReason { get; private set; }
+        /// <summary>Which kind of forfeit ended the match (Surrender/Disconnect/Leave/Timeout).</summary>
+        public MatchForfeitCause ForfeitCause { get; private set; }
         public TState State => state;
         public IReadOnlyCollection<MatchParticipant> Participants => participants.Values;
         public int PlayerCount => participants.Values.Count(item => item.Role == MatchParticipantRole.Player);
@@ -54,7 +58,7 @@ namespace Socket.Multiplayer
         /// <see cref="IMatchForfeitRules{TState,TEvent}"/> and the final event flows
         /// through the same sinks and EventConfirmed as regular commands.
         /// </summary>
-        public bool Forfeit(string stableId, double serverTime)
+        public bool Forfeit(string stableId, MatchForfeitCause cause, double serverTime)
         {
             if (Phase != MatchPhase.Active) return false;
             if (stableId == null || !participants.TryGetValue(stableId, out var leaver)) return false;
@@ -63,6 +67,8 @@ namespace Socket.Multiplayer
             if (!forfeitRules.TryForfeit(state, leaver, out var finalEvent)) return false;
 
             Phase = MatchPhase.Completed;
+            EndReason = MatchEndReason.Forfeit;
+            ForfeitCause = cause;
             var record = new MatchEventRecord<TEvent>(++eventSequence, serverTime, finalEvent);
             foreach (var sink in eventSinks.ToArray()) sink.Append(record);
             EventConfirmed?.Invoke(record);
@@ -74,19 +80,21 @@ namespace Socket.Multiplayer
             if (Phase != MatchPhase.Waiting) return false;
             if (!participants.Values.Any(item => item.Role == MatchParticipantRole.Player)) return false;
             Phase = MatchPhase.Active;
+            EndReason = MatchEndReason.None;
+            ForfeitCause = MatchForfeitCause.None;
             return true;
         }
 
         public MatchCommandResult<TEvent> Submit(string stableId, TCommand command, double serverTime)
         {
             if (Phase != MatchPhase.Active)
-                return MatchCommandResult<TEvent>.Reject("Match is not active.");
+                return MatchCommandResult<TEvent>.Reject(MatchRejectReason.NotActive, "Match is not active.");
             if (!participants.TryGetValue(stableId, out var actor))
-                return MatchCommandResult<TEvent>.Reject("Participant is not registered.");
+                return MatchCommandResult<TEvent>.Reject(MatchRejectReason.NotParticipant, "Participant is not registered.");
             if (actor.Role != MatchParticipantRole.Player)
-                return MatchCommandResult<TEvent>.Reject("Only players can submit commands.");
+                return MatchCommandResult<TEvent>.Reject(MatchRejectReason.NotParticipant, "Only players can submit commands.");
             if (!actor.IsConnected)
-                return MatchCommandResult<TEvent>.Reject("Participant is disconnected.");
+                return MatchCommandResult<TEvent>.Reject(MatchRejectReason.NotConnected, "Participant is disconnected.");
 
             var result = rules.TryApply(state, actor, command);
             if (!result.Accepted) return result;
@@ -94,7 +102,11 @@ namespace Socket.Multiplayer
             var record = new MatchEventRecord<TEvent>(++eventSequence, serverTime, result.Event);
             foreach (var sink in eventSinks.ToArray()) sink.Append(record);
             EventConfirmed?.Invoke(record);
-            if (rules.IsFinished(state)) Phase = MatchPhase.Completed;
+            if (rules.IsFinished(state))
+            {
+                Phase = MatchPhase.Completed;
+                EndReason = MatchEndReason.RulesDecided;
+            }
             return result;
         }
 
@@ -102,6 +114,7 @@ namespace Socket.Multiplayer
         {
             if (Phase == MatchPhase.Completed) return;
             Phase = MatchPhase.Cancelled;
+            EndReason = MatchEndReason.Cancelled;
         }
 
         public void AttachEventSink(IMatchEventSink<TEvent> sink)

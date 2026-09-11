@@ -10,24 +10,68 @@ namespace Socket.Multiplayer
         Cancelled
     }
 
+    /// <summary>
+    /// Structured rejection reason for a match command. Framework-level on purpose: no
+    /// layer should have to parse kernel debug text to tell "not your turn" apart from
+    /// "that command is illegal".
+    /// </summary>
+    public enum MatchRejectReason : byte
+    {
+        None = 0,
+        NotActive,
+        NotParticipant,
+        NotConnected,
+        NotYourTurn,
+        InvalidCommand
+    }
+
+    /// <summary>How a match left the Active phase (framework lifecycle).</summary>
+    public enum MatchEndReason : byte
+    {
+        None = 0,
+        RulesDecided,
+        Forfeit,
+        Cancelled
+    }
+
+    /// <summary>
+    /// Why a forfeit happened. Game-agnostic: any real-time match can lose a player to
+    /// resignation, a disconnect, leaving the room, or running out of turn time.
+    /// </summary>
+    public enum MatchForfeitCause : byte
+    {
+        None = 0,
+        Surrender,
+        Disconnect,
+        Leave,
+        Timeout
+    }
+
     public readonly struct MatchCommandResult<TEvent>
     {
         public bool Accepted { get; }
         public TEvent Event { get; }
+        public MatchRejectReason Reason { get; }
         public string Error { get; }
 
-        private MatchCommandResult(bool accepted, TEvent gameEvent, string error)
+        private MatchCommandResult(bool accepted, TEvent gameEvent, MatchRejectReason reason, string error)
         {
             Accepted = accepted;
             Event = gameEvent;
+            Reason = reason;
             Error = error ?? string.Empty;
         }
 
         public static MatchCommandResult<TEvent> Accept(TEvent gameEvent) =>
-            new MatchCommandResult<TEvent>(true, gameEvent, string.Empty);
+            new MatchCommandResult<TEvent>(true, gameEvent, MatchRejectReason.None, string.Empty);
 
+        /// <summary>Structured rejection; <paramref name="error"/> is debug text only.</summary>
+        public static MatchCommandResult<TEvent> Reject(MatchRejectReason reason, string error) =>
+            new MatchCommandResult<TEvent>(false, default(TEvent), reason, error);
+
+        /// <summary>A rule rejected the command itself (occupied point, illegal shape…).</summary>
         public static MatchCommandResult<TEvent> Reject(string error) =>
-            new MatchCommandResult<TEvent>(false, default(TEvent), error);
+            Reject(MatchRejectReason.InvalidCommand, error);
     }
 
     public readonly struct MatchEventRecord<TEvent>

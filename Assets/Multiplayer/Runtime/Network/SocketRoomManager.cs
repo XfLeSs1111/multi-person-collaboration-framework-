@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Mirror;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Socket.Multiplayer
 {
@@ -22,17 +23,23 @@ namespace Socket.Multiplayer
         [SerializeField] private NetworkRoomState roomStatePrefab;
         [SerializeField] private NetworkRoomChat roomChatPrefab;
         [SerializeField] private NetworkInteractable interactablePrefab;
-        [SerializeField] private NetworkGomokuMatch gomokuMatchPrefab;
+        // Renamed from gomokuMatchPrefab so the manager only knows the framework adapter;
+        // the former name is kept so existing scenes keep their prefab reference.
+        [FormerlySerializedAs("gomokuMatchPrefab")]
+        [SerializeField] private NetworkMatchAdapter matchPrefab;
         private SocketNetworkMetrics metrics;
 
         private RoomRegistry _registry;
         private readonly Dictionary<Guid, NetworkRoomState> _roomStates = new Dictionary<Guid, NetworkRoomState>();
         private readonly Dictionary<Guid, NetworkRoomChat> _roomChats = new Dictionary<Guid, NetworkRoomChat>();
-        private readonly Dictionary<Guid, NetworkGomokuMatch> _roomMatches = new Dictionary<Guid, NetworkGomokuMatch>();
+        private readonly Dictionary<Guid, NetworkMatchAdapter> _roomMatches = new Dictionary<Guid, NetworkMatchAdapter>();
         private readonly Dictionary<Guid, List<NetworkInteractable>> _roomInteractables = new Dictionary<Guid, List<NetworkInteractable>>();
+        // Bounded history per room; retention comes from the config centre (0 = off).
+        private MatchRecordBook _matchRecords;
 
         private readonly List<RoomInfo> _availableRooms = new List<RoomInfo>();
         private readonly List<PlayerInfo> _currentPlayers = new List<PlayerInfo>();
+        private readonly List<MatchRecordInfo> _roomMatchRecords = new List<MatchRecordInfo>();
         private Guid _localRoomId = LobbyRoom.Id;
         private RoomPhase _localPhase = RoomPhase.Lobby;
         private string _localRoomName = string.Empty;
@@ -53,6 +60,8 @@ namespace Socket.Multiplayer
         public Guid LocalRoomId => _localRoomId;
         public IReadOnlyList<RoomInfo> AvailableRooms => _availableRooms;
         public IReadOnlyList<PlayerInfo> CurrentPlayers => _currentPlayers;
+        /// <summary>Finished-match history of the local room (server-pushed, config-bounded).</summary>
+        public IReadOnlyList<MatchRecordInfo> MatchRecords => _roomMatchRecords;
         public string LastError => _lastError;
         public MultiplayerErrorCode LastErrorCode => _lastErrorCode;
         public SocketNetworkMetrics Metrics => metrics == null ? metrics = GetComponent<SocketNetworkMetrics>() : metrics;
@@ -215,7 +224,7 @@ namespace Socket.Multiplayer
                 {
                     if (_registry.TryGetRoom(previousRoomId, out var previousRoom))
                     {
-                        HandleGomokuParticipantLeft(previousRoom, conn);
+                        HandleParticipantLeft(previousRoom, conn, MatchForfeitCause.Disconnect);
                         SyncPlayers(previousRoom);
                     }
                     else
@@ -267,8 +276,8 @@ namespace Socket.Multiplayer
                 RefreshRoom(rejoinedRoom.Id);
                 if (_roomMatches.TryGetValue(rejoinedRoom.Id, out var match) && match != null && match.Phase == MatchPhase.Waiting)
                 {
-                    if (seat.IsSpectator) AddSpectatorToGomokuMatch(rejoinedRoom, connection);
-                    else AddPlayerToGomokuMatch(rejoinedRoom, connection);
+                    if (seat.IsSpectator) AddSpectatorToMatch(rejoinedRoom, connection);
+                    else AddPlayerToMatch(rejoinedRoom, connection);
                 }
                 BroadcastClientState(ClientRoomOperation.Joined, rejoinedRoom.Id);
                 return;
@@ -288,12 +297,22 @@ namespace Socket.Multiplayer
                 SendError(requester, error, errorCode);
                 return;
             }
-            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null && !match.ServerStartMatch())
+            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null)
             {
-                // Do not leave the room stuck InGame without a running match.
-                _registry.RollbackStart(room.Id);
-                SendError(requester, "The match could not be started.", MultiplayerErrorCode.StartFailed);
-                return;
+                // Rematch: reset the finished board and re-seat the current members so
+                // the same two players can start again without leaving the room.
+                if (match.Phase == MatchPhase.Completed || match.Phase == MatchPhase.Cancelled)
+                {
+                    match.ServerResetMatch();
+                    RebindMatchParticipants(room);
+                }
+                if (!match.ServerStartMatch())
+                {
+                    // Do not leave the room stuck InGame without a running match.
+                    _registry.RollbackStart(room.Id);
+                    SendError(requester, "The match could not be started.", MultiplayerErrorCode.StartFailed);
+                    return;
+                }
             }
             SpawnRoomInteractables(room);
             RefreshRoom(room.Id);
@@ -312,7 +331,7 @@ namespace Socket.Multiplayer
             DestroyRoomInteractables(room.Id);
             if (_roomMatches.TryGetValue(room.Id, out var match) && match != null)
                 match.ServerResetMatch();
-            RebindGomokuParticipants(room);
+            RebindMatchParticipants(room);
             SyncPlayers(room);
             RefreshRoom(room.Id);
             BroadcastClientState(ClientRoomOperation.ReturnedToLobby, room.Id);
@@ -382,7 +401,7 @@ namespace Socket.Multiplayer
             SyncPlayers(room);
             PlacePlayerInRoom(conn, room);
             EnsureRoomObjects(room);
-            AddPlayerToGomokuMatch(room, conn);
+            AddPlayerToMatch(room, conn);
             RefreshRoom(room.Id);
             BroadcastClientState(ClientRoomOperation.Created, room.Id);
         }
@@ -390,7 +409,7 @@ namespace Socket.Multiplayer
         [Server]
         private void JoinRoom(NetworkConnectionToClient conn, Guid roomId)
         {
-            if (_registry.TryGetRoom(roomId, out var existingRoom) && existingRoom.Phase != RoomPhase.Lobby && HasGomokuMatch())
+            if (_registry.TryGetRoom(roomId, out var existingRoom) && existingRoom.Phase != RoomPhase.Lobby && HasRoomMatch())
             {
                 JoinRoomAsSpectator(conn, roomId);
                 return;
@@ -406,7 +425,7 @@ namespace Socket.Multiplayer
             SyncPlayers(room);
             PlacePlayerInRoom(conn, room);
             EnsureRoomObjects(room);
-            AddPlayerToGomokuMatch(room, conn);
+            AddPlayerToMatch(room, conn);
             RefreshRoom(room.Id);
             BroadcastClientState(ClientRoomOperation.Joined, room.Id);
         }
@@ -423,7 +442,7 @@ namespace Socket.Multiplayer
             if (roomRemoved) DestroyRoomObjects(roomId);
             else
             {
-                HandleGomokuParticipantLeft(roomId, conn);
+                HandleParticipantLeft(roomId, conn, MatchForfeitCause.Leave);
                 SyncPlayers(roomId);
                 RefreshRoom(roomId);
             }
@@ -451,7 +470,7 @@ namespace Socket.Multiplayer
 
             SyncPlayer(conn);
             EnsureRoomObjects(room);
-            AddSpectatorToGomokuMatch(room, conn);
+            AddSpectatorToMatch(room, conn);
             RefreshRoom(room.Id);
             BroadcastClientState(ClientRoomOperation.Joined, room.Id);
         }
@@ -469,7 +488,7 @@ namespace Socket.Multiplayer
             foreach (var connectionId in affectedPlayers)
                 if (NetworkServer.connections.TryGetValue(connectionId, out var affectedConnection))
                 {
-                    RemovePlayerFromGomokuMatch(roomId, affectedConnection);
+                    RemovePlayerFromMatch(roomId, affectedConnection);
                     SyncPlayer(affectedConnection);
                     PlacePlayerInLobby(affectedConnection);
                 }
@@ -543,84 +562,99 @@ namespace Socket.Multiplayer
                 _roomChats.Add(room.Id, chat);
             }
 
-            EnsureGomokuMatch(room);
+            EnsureRoomMatch(room);
         }
 
         [Server]
-        private void EnsureGomokuMatch(RoomRegistry.Room room)
+        private void EnsureRoomMatch(RoomRegistry.Room room)
         {
-            if (room == null || _roomMatches.ContainsKey(room.Id) || gomokuMatchPrefab == null) return;
+            if (room == null || _roomMatches.ContainsKey(room.Id) || matchPrefab == null) return;
             var template = config == null ? null : config.defaultRoomTemplate;
-            var gomokuRules = template == null ? null : template.gomokuRules;
-            if (gomokuRules == null) return;
-
-            var matchObject = Instantiate(gomokuMatchPrefab.gameObject);
-            var match = matchObject.GetComponent<NetworkGomokuMatch>();
-            match.ServerInitialize(room.Id, gomokuRules.CreateRuleset());
+            // The adapter decides how the template turns into rules; the manager only
+            // owns the lifecycle, so a new game is a new adapter + prefab.
+            var matchObject = Instantiate(matchPrefab.gameObject);
+            var match = matchObject.GetComponent<NetworkMatchAdapter>();
+            match.ServerInitialize(room.Id, template);
             NetworkServer.Spawn(matchObject);
             _roomMatches.Add(room.Id, match);
         }
 
         [Server]
-        private void AddPlayerToGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        private void AddPlayerToMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
         {
             if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
             if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
-            match.ServerAddPlayer(player.StableId, player.displayName, room.PlayerIds.IndexOf(conn.connectionId));
+            var seat = room.PlayerIds.IndexOf(conn.connectionId);
+            // Past the game's seat count the member watches the duel: without this a 3rd
+            // player would silently take seat 2, never get a turn and still look like a
+            // player in every client's UI.
+            if (seat < 0 || seat >= match.MaxSeats)
+            {
+                match.ServerAddSpectator(player.StableId, player.displayName);
+                player.ServerSetSeat(-1);
+                return;
+            }
+
+            // AddParticipant is false when the player is already seated, but the seat still
+            // has to be re-applied: it is a SyncVar that must survive re-joins and resets.
+            match.ServerAddPlayer(player.StableId, player.displayName, seat);
+            player.ServerSetSeat(seat);
         }
 
         [Server]
-        private void AddSpectatorToGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        private void AddSpectatorToMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
         {
             if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
             if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
-            match.ServerAddSpectator(player.StableId, player.displayName);
+            if (match.ServerAddSpectator(player.StableId, player.displayName))
+                player.ServerSetSeat(-1);
         }
 
         [Server]
-        private void RebindGomokuParticipants(RoomRegistry.Room room)
+        private void RebindMatchParticipants(RoomRegistry.Room room)
         {
             if (room == null) return;
             foreach (var connectionId in room.PlayerIds)
                 if (NetworkServer.connections.TryGetValue(connectionId, out var connection))
-                    AddPlayerToGomokuMatch(room, connection);
+                    AddPlayerToMatch(room, connection);
             foreach (var connectionId in room.SpectatorIds)
                 if (NetworkServer.connections.TryGetValue(connectionId, out var connection))
-                    AddSpectatorToGomokuMatch(room, connection);
+                    AddSpectatorToMatch(room, connection);
         }
 
         [Server]
-        private void RemovePlayerFromGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        private void RemovePlayerFromMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
         {
             if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
             if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
-            match.ServerRemoveParticipant(player.StableId);
+            match.ServerDropParticipant(player.StableId);
         }
 
         [Server]
-        private void RemovePlayerFromGomokuMatch(Guid roomId, NetworkConnectionToClient conn)
+        private void RemovePlayerFromMatch(Guid roomId, NetworkConnectionToClient conn)
         {
             if (_registry != null && _registry.TryGetRoom(roomId, out var room))
-                RemovePlayerFromGomokuMatch(room, conn);
+                RemovePlayerFromMatch(room, conn);
         }
 
         /// <summary>
-        /// A member left a room (leave or disconnect): mark the match participant gone.
-        /// Active matches forfeit instead of deadlocking on the leaver's turn.
+        /// A member left a room (leave or disconnect): hand the framework cause to the
+        /// match adapter, which forfeits an active match instead of deadlocking on the
+        /// leaver's turn and keeps the survivor seated.
         /// </summary>
         [Server]
-        private void HandleGomokuParticipantLeft(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        private void HandleParticipantLeft(RoomRegistry.Room room, NetworkConnectionToClient conn, MatchForfeitCause cause)
         {
             if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
             if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
-            match.ServerHandleParticipantLeft(player.StableId);
+            match.ServerHandleParticipantLeft(player.StableId, cause);
         }
 
         [Server]
-        private void HandleGomokuParticipantLeft(Guid roomId, NetworkConnectionToClient conn)
+        private void HandleParticipantLeft(Guid roomId, NetworkConnectionToClient conn, MatchForfeitCause cause)
         {
             if (_registry != null && _registry.TryGetRoom(roomId, out var room))
-                HandleGomokuParticipantLeft(room, conn);
+                HandleParticipantLeft(room, conn, cause);
         }
 
         /// <summary>
@@ -633,6 +667,54 @@ namespace Socket.Multiplayer
             return _rateLimiter == null || _rateLimiter.TryAcquire(connectionId, kind, NetworkTime.localTime);
         }
 
+        /// <summary>
+        /// Tells one client that its match command was rejected. The kernel hands over a
+        /// structured reason, which is mapped to the stable wire code here — no layer has
+        /// to parse debug text. Only the sender hears it.
+        /// </summary>
+        [Server]
+        public void ServerReportMatchRejection(NetworkConnectionToClient conn, MatchRejectReason reason, string debugText)
+        {
+            if (conn == null) return;
+            SendError(conn, debugText, ToErrorCode(reason));
+        }
+
+        private static MultiplayerErrorCode ToErrorCode(MatchRejectReason reason)
+        {
+            switch (reason)
+            {
+                case MatchRejectReason.NotYourTurn: return MultiplayerErrorCode.NotYourTurn;
+                case MatchRejectReason.InvalidCommand: return MultiplayerErrorCode.InvalidMatchCommand;
+                case MatchRejectReason.NotActive: return MultiplayerErrorCode.MatchNotRunning;
+                case MatchRejectReason.NotParticipant: return MultiplayerErrorCode.MatchNotRunning;
+                case MatchRejectReason.NotConnected: return MultiplayerErrorCode.MatchNotRunning;
+                default: return MultiplayerErrorCode.MatchNotRunning;
+            }
+        }
+
+        /// <summary>
+        /// Writes the finished match into the (config-bounded) record book. Called from the
+        /// room's InGame → Lobby transition, which happens once per game.
+        /// </summary>
+        [Server]
+        private void RecordFinishedMatch(Guid roomId, NetworkMatchAdapter match)
+        {
+            var limit = config == null ? 0 : config.matchRecordLimit;
+            if (limit <= 0 || match == null) return;
+            if (_matchRecords == null || _matchRecords.Limit != limit)
+                _matchRecords = new MatchRecordBook(limit);
+            _registry.TryGetRoom(roomId, out var room);
+            _matchRecords.Record(roomId, match.ServerCreateRecord(room == null ? string.Empty : room.Name));
+        }
+
+        private MatchRecordInfo[] BuildMatchRecords(Guid roomId)
+        {
+            if (_matchRecords == null || !_matchRecords.Enabled || roomId == LobbyRoom.Id)
+                return Array.Empty<MatchRecordInfo>();
+            var records = _matchRecords.Get(roomId);
+            return records.Count == 0 ? Array.Empty<MatchRecordInfo>() : new List<MatchRecordInfo>(records).ToArray();
+        }
+
         // Idle-room sweep (M3 P2.15): runs only on the server, throttled to ~1s.
         // Zero-member rooms are removed immediately elsewhere; this handles rooms that
         // still have members but no tracked activity for config.roomIdleTimeout seconds.
@@ -643,11 +725,79 @@ namespace Socket.Multiplayer
             _nextIdleSweep = Time.unscaledTime + 1f;
             RecycleIdleRooms();
             PruneReconnectState();
+            SweepMatchTimeouts();
+            SweepFinishedMatches();
+            ReconcileRoomMembers();
+        }
+
+        // Self-heal (framework): a member's replicated room/seat must always match the
+        // authoritative registry. Room creation and player spawn can race, and a player
+        // stuck on "lobby / no seat" cannot act on the board at all, so the sweep
+        // re-applies room assignment and match seating once a second.
+        [Server]
+        private void ReconcileRoomMembers()
+        {
+            if (_registry == null) return;
+            foreach (var room in _registry.Rooms)
+            {
+                foreach (var connectionId in room.PlayerIds)
+                    if (NetworkServer.connections.TryGetValue(connectionId, out var conn) && conn.identity != null)
+                    {
+                        if (conn.identity.TryGetComponent<NetworkPlayer>(out var player) &&
+                            _registry.TryGetPlayer(connectionId, out var state) && player.RoomId != state.RoomId)
+                            SyncPlayer(conn);
+                        AddPlayerToMatch(room, conn);
+                    }
+                foreach (var connectionId in room.SpectatorIds)
+                    if (NetworkServer.connections.TryGetValue(connectionId, out var conn) && conn.identity != null)
+                        AddSpectatorToMatch(room, conn);
+            }
+        }
+
+        // Turn timer (config.turnTimeoutSeconds): whoever runs out of thinking time
+        // loses the match, but the room survives so the pair can rematch.
+        [Server]
+        private void SweepMatchTimeouts()
+        {
+            var timeout = config == null ? 0f : config.turnTimeoutSeconds;
+            if (timeout <= 0f) return;
+            var now = NetworkTime.localTime;
+            foreach (var pair in _roomMatches)
+            {
+                var match = pair.Value;
+                if (match == null || match.Phase != MatchPhase.Active) continue;
+                if (match.TurnDeadline <= 0d || now <= match.TurnDeadline) continue;
+                var stableId = match.ServerFindStableIdBySeat(match.CurrentSeat);
+                if (string.IsNullOrEmpty(stableId)) continue;
+                if (match.ServerForfeit(stableId, MatchForfeitCause.Timeout))
+                    Debug.Log($"Turn timeout in room {pair.Key}: seat {match.CurrentSeat} forfeits.", this);
+            }
+        }
+
+        // A finished board keeps its final position on screen, but the room returns to
+        // the lobby so the same players can ready up and start the next game instead of
+        // waiting for the leader to click 返回大厅.
+        [Server]
+        private void SweepFinishedMatches()
+        {
+            if (_registry == null) return;
+            foreach (var pair in _roomMatches)
+            {
+                var match = pair.Value;
+                if (match == null || match.Phase != MatchPhase.Completed) continue;
+                if (!_registry.ResetToLobby(pair.Key)) continue;
+                // The room going back to the lobby is the single "match just finished"
+                // edge, so the record is written exactly once per game.
+                RecordFinishedMatch(pair.Key, match);
+                SyncPlayers(pair.Key);
+                RefreshRoom(pair.Key);
+                BroadcastClientState(ClientRoomOperation.ReturnedToLobby, pair.Key);
+                Debug.Log($"Match in room {pair.Key} ended ({match.DescribeResult()} / {match.EndDetail}); room returned to lobby.", this);
+            }
         }
 
         [Server]
-        private void RecycleIdleRooms()
-        {
+        private void RecycleIdleRooms()        {
             var timeout = config == null ? 120f : config.roomIdleTimeout;
             if (timeout <= 0f) return;
             if (_registry.CollectIdleRooms(NetworkTime.localTime, timeout, _idleRooms) == 0) return;
@@ -703,7 +853,7 @@ namespace Socket.Multiplayer
             return template == null ? config == null ? 20 : config.maxSpectators : template.maxSpectators;
         }
 
-        private bool HasGomokuMatch()
+        private bool HasRoomMatch()
         {
             var template = config == null ? null : config.defaultRoomTemplate;
             return template != null && template.gomokuRules != null;
@@ -853,7 +1003,8 @@ namespace Socket.Multiplayer
                         phase = room.Phase,
                         error = string.Empty,
                         roomInfos = BuildRoomInfos(),
-                        playerInfos = BuildPlayerInfos(room)
+                        playerInfos = BuildPlayerInfos(room),
+                        matchRecords = BuildMatchRecords(room.Id)
                     });
                 }
                 else
@@ -886,7 +1037,8 @@ namespace Socket.Multiplayer
                     phase = room.Phase,
                     error = string.Empty,
                     roomInfos = BuildRoomInfos(),
-                    playerInfos = BuildPlayerInfos(room)
+                    playerInfos = BuildPlayerInfos(room),
+                    matchRecords = BuildMatchRecords(room.Id)
                 });
             }
             else
@@ -990,6 +1142,8 @@ namespace Socket.Multiplayer
             if (message.roomInfos != null) _availableRooms.AddRange(message.roomInfos);
             _currentPlayers.Clear();
             if (message.playerInfos != null) _currentPlayers.AddRange(message.playerInfos);
+            _roomMatchRecords.Clear();
+            if (message.matchRecords != null) _roomMatchRecords.AddRange(message.matchRecords);
             _localRoomId = message.roomId == Guid.Empty ? LobbyRoom.Id : message.roomId;
             _localPhase = message.phase;
             _lastError = message.error ?? string.Empty;
@@ -1006,6 +1160,7 @@ namespace Socket.Multiplayer
         {
             _availableRooms.Clear();
             _currentPlayers.Clear();
+            _roomMatchRecords.Clear();
             _localRoomId = LobbyRoom.Id;
             _localPhase = RoomPhase.Lobby;
             _localRoomName = string.Empty;
