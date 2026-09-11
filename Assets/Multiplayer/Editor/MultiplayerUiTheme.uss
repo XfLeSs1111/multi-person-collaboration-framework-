@@ -14,7 +14,7 @@
     --mp-bg: var(--unity-colors-default-background);
     --mp-card-bg: var(--unity-colors-box-background);
     --mp-card-border: var(--unity-colors-box-border);
-    padding: 12px;
+    padding: 14px 16px;
     flex-grow: 1;
     background-color: var(--mp-bg);
 }
@@ -116,8 +116,8 @@
     border-width: 1px;
     border-color: var(--mp-card-border);
     border-radius: var(--mp-radius);
-    padding: 14px;
-    margin-bottom: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
 }
 
 .mp-section__head {
@@ -143,15 +143,17 @@
 /* ── 表单行 / 单位 / 摘要 ── */
 .mp-row {
     flex-direction: row;
+    align-items: center;
+    margin-bottom: 4px;
 }
 
 .mp-unit {
-    width: 40px;
+    width: 34px;
     -unity-text-align: middle-left;
     color: var(--unity-colors-label-text);
-    opacity: 0.6;
+    opacity: 0.55;
     font-size: 11px;
-    margin-right: 6px;
+    margin-right: 12px;
 }
 
 .mp-summary {
@@ -263,10 +265,16 @@
 
 /* ── 字段标签对齐 ── */
 .mp-root .unity-base-field__label {
-    width: 132px;
+    width: 118px;
     flex-shrink: 0;
     align-self: center;
     font-size: 12px;
+    color: var(--unity-colors-label-text);
+    margin-right: 4px;
+}
+
+.mp-root .unity-base-field {
+    margin-bottom: 4px;
 }
 
 /* ============ 参考 MCP for Unity 窗口的层级组件 ============ */

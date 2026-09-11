@@ -149,12 +149,14 @@ namespace Socket.Multiplayer.Editor
             return label;
         }
 
-        /// <summary>字段 + 单位后缀（如“秒”“人”）的横向组合。</summary>
-        internal static VisualElement WithUnit(VisualElement field, string unit)
+        /// <summary>字段 + 单位后缀：字段定宽、单位紧跟（避免单位飘到行尾造成参差）。</summary>
+        internal static VisualElement WithUnit(VisualElement field, string unit, float fieldWidth = 110f)
         {
             var row = new VisualElement();
             row.AddToClassList("mp-row");
-            field.style.flexGrow = 1f;
+            field.style.width = fieldWidth;
+            field.style.flexGrow = 0f;
+            field.style.flexShrink = 0f;
             row.Add(field);
             row.Add(Unit(unit));
             return row;

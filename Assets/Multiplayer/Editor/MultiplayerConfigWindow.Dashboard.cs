@@ -39,6 +39,29 @@ namespace Socket.Multiplayer.Editor
                     : $"{config.defaultRoomTemplate.templateName}\n{config.defaultRoomTemplate.PlayerSpawnCount} 出生点 / {config.defaultRoomTemplate.InteractableCount} 交互物"));
             page.Add(cards);
 
+            var envSection = new VisualElement();
+            envSection.AddToClassList("mp-section");
+            envSection.Add(MultiplayerInspectorUtility.SectionHeader("运行环境"));
+            var template = config.defaultRoomTemplate;
+            envSection.Add(MultiplayerInspectorUtility.ItemRow(
+                "协议版本",
+                $"V{MultiplayerProtocol.Version}（签名 {MultiplayerProtocol.GetConfigSignature(config)}）"));
+            envSection.Add(MultiplayerInspectorUtility.ItemRow(
+                "房间模板",
+                template == null ? "未绑定模板，使用兼容人数" : $"{template.templateName}（{config.EffectiveMinPlayers}-{config.EffectiveMaxPlayers} 人）",
+                template == null ? "mp-dot--warn" : null));
+            envSection.Add(MultiplayerInspectorUtility.ItemRow(
+                "玩法规则",
+                template == null || template.rules == null ? "未绑定规则资产" : template.rules.RulesSummary,
+                template == null || template.rules == null ? "mp-dot--warn" : null));
+            envSection.Add(MultiplayerInspectorUtility.ItemRow(
+                "场景",
+                $"离线 {ShortScene(config.offlineScene)} / 在线 {ShortScene(config.lobbyScene)}"));
+            envSection.Add(MultiplayerInspectorUtility.ItemRow(
+                "连接入口",
+                $"{config.defaultAddress}:{config.port}"));
+            page.Add(envSection);
+
             var actionSection = new VisualElement();
             actionSection.AddToClassList("mp-section");
             actionSection.Add(MultiplayerInspectorUtility.SectionHeader("快捷操作"));
@@ -82,6 +105,13 @@ namespace Socket.Multiplayer.Editor
             pill.AddToClassList("mp-pill");
             hero.Add(pill);
             return hero;
+        }
+
+        private static string ShortScene(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "未配置";
+            var name = System.IO.Path.GetFileNameWithoutExtension(path);
+            return string.IsNullOrEmpty(name) ? path : name;
         }
 
         private static VisualElement Card(string title, string body)

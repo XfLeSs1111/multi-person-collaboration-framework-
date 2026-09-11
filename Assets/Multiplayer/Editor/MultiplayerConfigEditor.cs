@@ -96,7 +96,7 @@ namespace Socket.Multiplayer.Editor
             pane.Add(MultiplayerInspectorUtility.Field(so, "defaultRoomTemplate", "默认房间模板"));
 
             legacyGroup = new VisualElement();
-            legacyGroup.Add(MultiplayerInspectorUtility.Info("未绑定房间模板时，使用下面的兼容人数与自动排列的出生点。"));
+            legacyGroup.Add(MultiplayerInspectorUtility.Hint("未绑定房间模板时，使用下面的兼容人数与自动排列的出生点。"));
             legacyGroup.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "minPlayers", "兼容最少人数"), "人"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxPlayers", "兼容最多人数"), "人")));
@@ -105,20 +105,20 @@ namespace Socket.Multiplayer.Editor
             pane.Add(MultiplayerInspectorUtility.Field(so, "roomName", "房间名称"));
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxRooms", "最大房间数"), "个"),
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxServerPlayers", "服务器最大连接数"), "人"),
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxSpectators", "最大观战人数"), "人")));
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxServerPlayers", "服务器最大连接数"), "人")));
+            pane.Add(MultiplayerInspectorUtility.Row(
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxSpectators", "最大观战人数"), "人"),
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "roomIdleTimeout", "闲置房回收时间"), "秒")));
 
             capacityLabel = MultiplayerInspectorUtility.Summary("容量摘要", string.Empty, out var capacityRow);
             pane.Add(capacityRow);
 
             pane.Add(MultiplayerInspectorUtility.Row(
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "roomIdleTimeout", "闲置房回收时间"), "秒"),
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "reconnectWindow", "断线重连窗口"), "秒")));
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "reconnectWindow", "断线重连窗口"), "秒"),
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "回合思考时限"), "秒")));
             pane.Add(MultiplayerInspectorUtility.Row(
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "回合思考时限"), "秒"),
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "matchRecordLimit", "保存战绩条数"), "条")));
-
-            pane.Add(MultiplayerInspectorUtility.Field(so, "recordReplays", "保存回放数据"));
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "matchRecordLimit", "保存战绩条数"), "条"),
+                MultiplayerInspectorUtility.Field(so, "recordReplays", "保存回放数据")));
             pane.Add(MultiplayerInspectorUtility.Field(so, "autoStartWhenAllReady", "全员准备后自动开始"));
             pane.Add(MultiplayerInspectorUtility.Field(so, "allowLateJoiners", "允许中途加入"));
         }
@@ -144,7 +144,7 @@ namespace Socket.Multiplayer.Editor
             protocolLabel = MultiplayerInspectorUtility.Summary("协议版本", string.Empty, out var protocolRow);
             pane.Add(protocolRow);
 
-            pane.Add(MultiplayerInspectorUtility.Info("服务端限频：各入口每连接的令牌桶速率，容量为速率的两倍以吸收点击突发。"));
+            pane.Add(MultiplayerInspectorUtility.Hint("服务端限频：各入口每连接的令牌桶速率，容量为速率的两倍以吸收点击突发。"));
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "roomCommandPerSecond", "房间操作/秒"), "次/秒"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "chatPerSecond", "聊天/秒"), "次/秒")));
@@ -156,7 +156,7 @@ namespace Socket.Multiplayer.Editor
         private void BuildScenePane(VisualElement pane)
         {
             var so = serializedObject;
-            pane.Add(MultiplayerInspectorUtility.Info("当前架构只加载一个物理在线场景，各房间通过 MatchInterestManagement 隔离可见性。"));
+            pane.Add(MultiplayerInspectorUtility.Hint("当前架构只加载一个物理在线场景，各房间通过 MatchInterestManagement 隔离可见性。"));
             pane.Add(MultiplayerInspectorUtility.Field(so, "offlineScene", "离线启动场景"));
             pane.Add(MultiplayerInspectorUtility.Field(so, "lobbyScene", "在线大厅场景"));
         }
@@ -164,7 +164,7 @@ namespace Socket.Multiplayer.Editor
         private void BuildControlPane(VisualElement pane)
         {
             var so = serializedObject;
-            pane.Add(MultiplayerInspectorUtility.Info("移动由服务器执行，客户端按输入频率提交方向。"));
+            pane.Add(MultiplayerInspectorUtility.Hint("移动由服务器执行，客户端按输入频率提交方向。"));
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "moveSpeed", "移动速度"), "米/秒"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "inputSendRate", "输入频率"), "次/秒")));
@@ -174,7 +174,7 @@ namespace Socket.Multiplayer.Editor
         private void BuildInteractionPane(VisualElement pane)
         {
             var so = serializedObject;
-            pane.Add(MultiplayerInspectorUtility.Info("交互对象的具体预制体和位置在房间模板中配置。"));
+            pane.Add(MultiplayerInspectorUtility.Hint("交互对象的具体预制体和位置在房间模板中配置。"));
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "interactionRange", "交互距离"), "米"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "interactionLeaseSeconds", "占用时长"), "秒")));
@@ -184,7 +184,7 @@ namespace Socket.Multiplayer.Editor
         private void BuildInterfacePane(VisualElement pane)
         {
             var so = serializedObject;
-            pane.Add(MultiplayerInspectorUtility.Info("新版可视化界面（uGUI）由 MultiplayerUi 运行时构建；旧版 IMGUI 面板仅作调试后备。"));
+            pane.Add(MultiplayerInspectorUtility.Hint("新版可视化界面（uGUI）由 MultiplayerUi 运行时构建；旧版 IMGUI 面板仅作调试后备。"));
             pane.Add(MultiplayerInspectorUtility.Field(so, "useLegacyImGuiHud", "保留旧版 IMGUI 面板"));
         }
 
