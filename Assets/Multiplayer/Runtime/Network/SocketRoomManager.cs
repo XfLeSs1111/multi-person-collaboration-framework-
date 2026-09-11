@@ -40,6 +40,8 @@ namespace Socket.Multiplayer
         private MultiplayerErrorCode _lastErrorCode = MultiplayerErrorCode.None;
         private Guid _pendingRoomId;
         private ConnectionRateLimiter _rateLimiter;
+        private readonly List<RoomRegistry.Room> _idleRooms = new List<RoomRegistry.Room>();
+        private float _nextIdleSweep;
 
         public event Action RoomStateChanged;
 
@@ -280,11 +282,14 @@ namespace Socket.Multiplayer
                 SendError(conn, "Too many room requests.", MultiplayerErrorCode.RateLimited);
                 return;
             }
-            if (!_registry.TryGetPlayer(conn.connectionId, out _))
+            if (!_registry.TryGetPlayer(conn.connectionId, out var requesterState))
             {
                 SendError(conn, "Player is not ready.", MultiplayerErrorCode.NotRegistered);
                 return;
             }
+            // Every accepted room request counts as activity for idle recycling (M3 P2.15).
+            if (requesterState.RoomId != LobbyRoom.Id)
+                _registry.TouchRoom(requesterState.RoomId, NetworkTime.localTime);
 
             switch (message.serverRoomOperation)
             {
@@ -328,6 +333,7 @@ namespace Socket.Multiplayer
                 return;
             }
 
+            _registry.TouchRoom(room.Id, NetworkTime.localTime);
             SyncPlayers(room);
             PlacePlayerInRoom(conn, room);
             EnsureRoomObjects(room);
@@ -580,6 +586,39 @@ namespace Socket.Multiplayer
         public bool ServerTryConsumeRate(int connectionId, RateLimitKind kind)
         {
             return _rateLimiter == null || _rateLimiter.TryAcquire(connectionId, kind, NetworkTime.localTime);
+        }
+
+        // Idle-room sweep (M3 P2.15): runs only on the server, throttled to ~1s.
+        // Zero-member rooms are removed immediately elsewhere; this handles rooms that
+        // still have members but no tracked activity for config.roomIdleTimeout seconds.
+        private void Update()
+        {
+            if (_registry == null || !NetworkServer.active) return;
+            if (Time.unscaledTime < _nextIdleSweep) return;
+            _nextIdleSweep = Time.unscaledTime + 1f;
+            RecycleIdleRooms();
+        }
+
+        [Server]
+        private void RecycleIdleRooms()
+        {
+            var timeout = config == null ? 120f : config.roomIdleTimeout;
+            if (timeout <= 0f) return;
+            if (_registry.CollectIdleRooms(NetworkTime.localTime, timeout, _idleRooms) == 0) return;
+
+            foreach (var room in _idleRooms)
+            {
+                DestroyRoomObjects(room.Id);
+                foreach (var connectionId in room.MemberIds)
+                    if (NetworkServer.connections.TryGetValue(connectionId, out var conn))
+                    {
+                        SyncPlayer(conn);
+                        PlacePlayerInLobby(conn);
+                    }
+                BroadcastClientState(ClientRoomOperation.Cancelled, room.Id);
+                Debug.Log($"Recycled idle room '{room.Name}' after {timeout:F0}s of inactivity.", this);
+            }
+            _idleRooms.Clear();
         }
 
         private int GetRequiredMatchPlayers()

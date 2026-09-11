@@ -100,6 +100,7 @@ namespace Socket.Multiplayer.Editor
             config.interactPerSecond = 2f;
             config.gameCommandPerSecond = 4f;
             config.useLegacyImGuiHud = false;
+            config.roomIdleTimeout = 120f;
             EditorUtility.SetDirty(config);
             return config;
         }

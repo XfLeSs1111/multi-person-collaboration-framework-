@@ -60,6 +60,12 @@ namespace Socket.Multiplayer
         public int maxSpectators = 20;
 
         [TabGroup("配置分区", "房间")]
+        [PropertySpace(SpaceBefore = 8)]
+        [LabelText("闲置房回收时间"), MinValue(0f), SuffixLabel("秒")]
+        [Tooltip("房内长时间无操作自动回收该房间并让成员返回大厅（0 表示关闭）。空房（0 成员）仍会立即删除。")]
+        public float roomIdleTimeout = 120f;
+
+        [TabGroup("配置分区", "房间")]
         [Sirenix.OdinInspector.ShowInInspector, Sirenix.OdinInspector.ReadOnly, LabelText("容量摘要")]
         private string CapacitySummary => $"{maxRooms} 个房间 / 单房 {EffectiveMaxPlayers} 人 / 整服 {ServerConnectionLimit} 人";
 
@@ -206,6 +212,7 @@ namespace Socket.Multiplayer
             interactionLeaseSeconds = Mathf.Max(0.1f, interactionLeaseSeconds);
             serverTtl = Mathf.Max(0.5f, serverTtl);
             spawnSpacing = Mathf.Max(0.5f, spawnSpacing);
+            roomIdleTimeout = Mathf.Max(0f, roomIdleTimeout);
             roomCommandPerSecond = Mathf.Max(0.5f, roomCommandPerSecond);
             chatPerSecond = Mathf.Max(0.5f, chatPerSecond);
             interactPerSecond = Mathf.Max(0.5f, interactPerSecond);

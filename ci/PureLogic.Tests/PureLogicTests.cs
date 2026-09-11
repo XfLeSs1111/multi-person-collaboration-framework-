@@ -82,6 +82,26 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void IdleRooms_RecycleAfterTimeoutAndReturnMembers()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryCreateRoom(1, "A", 2, out var room, out _, out _);
+            registry.TouchRoom(room.Id, 100d);
+
+            var recycled = new System.Collections.Generic.List<RoomRegistry.Room>();
+            Assert.AreEqual(0, registry.CollectIdleRooms(200d, 120d, recycled));
+            Assert.AreEqual(1, registry.CollectIdleRooms(220d, 120d, recycled));
+            Assert.IsTrue(registry.TryGetPlayer(1, out var alice));
+            Assert.AreEqual(LobbyRoom.Id, alice.RoomId);
+
+            // Untracked rooms (LastActivityTime == 0) are never recycled by the sweep.
+            registry.TryCreateRoom(1, "B", 2, out var fresh, out _, out _);
+            Assert.AreEqual(0, registry.CollectIdleRooms(999999d, 120d, recycled));
+            Assert.IsTrue(registry.TryGetRoom(fresh.Id, out _));
+        }
+
+        [Test]
         public void Gomoku_TurnsAndWinCompleteTheMatch()
         {
             var ruleset = new GomokuRuleset(15, 5, true, true, true);

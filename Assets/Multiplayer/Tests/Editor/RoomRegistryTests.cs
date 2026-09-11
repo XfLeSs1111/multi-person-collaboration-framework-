@@ -190,6 +190,32 @@ namespace Socket.Multiplayer.Tests
             Assert.IsFalse(registry.TryJoinRoomAsSpectator(1, room.Id, 1, out _, out _, out var code));
             Assert.AreEqual(MultiplayerErrorCode.AlreadyInRoom, code);
         }
+
+        [Test]
+        public void IdleRoomsAreRecycledAndMembersReturnToLobby()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TouchRoom(room.Id, 100d);
+
+            var recycled = new System.Collections.Generic.List<RoomRegistry.Room>();
+            Assert.AreEqual(0, registry.CollectIdleRooms(150d, 120d, recycled));
+            Assert.IsTrue(registry.TryGetRoom(room.Id, out _));
+
+            registry.TouchRoom(room.Id, 200d);
+            Assert.AreEqual(1, registry.CollectIdleRooms(320d, 120d, recycled));
+            Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+            Assert.IsTrue(registry.TryGetPlayer(1, out var alice));
+            Assert.AreEqual(LobbyRoom.Id, alice.RoomId);
+
+            // Untracked rooms (LastActivityTime == 0) are never recycled by the sweep.
+            registry.TryCreateRoom(1, "Room B", 2, out var fresh, out _, out _);
+            Assert.AreEqual(0, registry.CollectIdleRooms(999999d, 120d, recycled));
+            Assert.IsTrue(registry.TryGetRoom(fresh.Id, out _));
+        }
     }
 }
 #endif

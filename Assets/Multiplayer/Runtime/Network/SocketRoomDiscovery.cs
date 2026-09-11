@@ -111,8 +111,8 @@ namespace Socket.Multiplayer
                 }
             }
 
-            if (_servers.Count == 0 || Time.time < _nextPrune) return;
-            _nextPrune = Time.time + pruneInterval;
+            if (_servers.Count == 0 || Time.unscaledTime < _nextPrune) return;
+            _nextPrune = Time.unscaledTime + pruneInterval;
             PruneExpiredServers();
         }
 
@@ -205,7 +205,7 @@ namespace Socket.Multiplayer
             if (_servers.TryGetValue(response.serverId, out var entry))
             {
                 changed = !AreRoomsEqual(entry.rooms, normalizedRooms);
-                entry.lastSeen = Time.time;
+                entry.lastSeen = Time.unscaledTime;
                 entry.rooms = normalizedRooms;
             }
             else
@@ -214,7 +214,7 @@ namespace Socket.Multiplayer
                 {
                     serverId = response.serverId,
                     rooms = normalizedRooms,
-                    lastSeen = Time.time
+                    lastSeen = Time.unscaledTime
                 };
                 changed = true;
             }
@@ -246,8 +246,10 @@ namespace Socket.Multiplayer
             ServersChanged?.Invoke();
         }
 
-        public void SetRequestedRoom(string value) => requestedRoom = value;
-
+        // NOTE (M3 P2.16): "SetRequestedRoom" was a dead API — the filter below stayed
+        // server-level (a whole server is hidden when none of its rooms matches) and no
+        // caller existed. Kept the field as a legacy wire slot; use it only if a room-name
+        // gate gets a real UI entry point later.
         private void StopAdvertising()
         {
             if (serverUdpClient == null) return;
@@ -258,7 +260,7 @@ namespace Socket.Multiplayer
 
         private void PruneExpiredServers()
         {
-            var cutoff = Time.time - serverTtl;
+            var cutoff = Time.unscaledTime - serverTtl;
             var expired = _servers
                 .Where(pair => pair.Value.lastSeen < cutoff)
                 .Select(pair => pair.Key)

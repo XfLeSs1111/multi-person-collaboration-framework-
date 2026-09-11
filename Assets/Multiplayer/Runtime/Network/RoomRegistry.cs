@@ -27,6 +27,8 @@ namespace Socket.Multiplayer
             public string Name;
             public int MaxPlayers;
             public RoomPhase Phase;
+            /// <summary>Server clock of the last tracked room activity; 0 = not tracked yet.</summary>
+            public double LastActivityTime;
             internal readonly List<int> PlayerIds = new List<int>();
             internal readonly List<int> SpectatorIds = new List<int>();
             internal IEnumerable<int> MemberIds => PlayerIds.Concat(SpectatorIds);
@@ -399,6 +401,38 @@ namespace Socket.Multiplayer
 
         public bool TryGetRoom(Guid roomId, out Room room) =>
             _rooms.TryGetValue(roomId, out room);
+
+        /// <summary>Marks a room as recently active; drives idle recycling (M3 P2.15).</summary>
+        public void TouchRoom(Guid roomId, double now)
+        {
+            if (_rooms.TryGetValue(roomId, out var room)) room.LastActivityTime = now;
+        }
+
+        /// <summary>
+        /// Removes rooms with no tracked activity for <paramref name="timeout"/> seconds and
+        /// returns their members to the lobby. Rooms whose LastActivityTime was never set (0)
+        /// are never recycled — creation paths must TouchRoom first, so a missing clock can
+        /// not destroy a fresh room. Member connections stay alive so the network adapter can
+        /// notify and teleport them; this method only mutates registry state.
+        /// </summary>
+        public int CollectIdleRooms(double now, double timeout, List<Room> recycled)
+        {
+            recycled.Clear();
+            if (timeout <= 0d) return 0;
+
+            foreach (var room in _rooms.Values.ToArray())
+                if (room.LastActivityTime > 0d && now - room.LastActivityTime >= timeout)
+                    recycled.Add(room);
+
+            foreach (var room in recycled)
+            {
+                foreach (var playerId in room.PlayerIds.Concat(room.SpectatorIds).ToArray())
+                    if (_players.TryGetValue(playerId, out var player))
+                        AssignPlayer(player, null, false, false);
+                _rooms.Remove(room.Id);
+            }
+            return recycled.Count;
+        }
 
         private bool TryGetPlayerRoom(int connectionId, out Player player, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
