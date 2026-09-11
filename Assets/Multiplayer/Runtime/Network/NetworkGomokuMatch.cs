@@ -70,9 +70,10 @@ namespace Socket.Multiplayer
         [Server]
         public override void ServerInitialize(Guid roomId, RoomTemplate template)
         {
-            var matchRuleset = template == null || template.gomokuRules == null
+            var ruleConfig = template == null ? null : template.rules as GomokuRuleConfig;
+            var matchRuleset = ruleConfig == null
                 ? new GomokuRuleset(15, 5, true, true, false)
-                : template.gomokuRules.CreateRuleset();
+                : ruleConfig.CreateRuleset();
             matchIdText = roomId.ToString();
             ruleset = matchRuleset;
             var networkMatch = GetComponent<NetworkMatch>();

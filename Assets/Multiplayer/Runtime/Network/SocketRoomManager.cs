@@ -456,8 +456,8 @@ namespace Socket.Multiplayer
         {
             var template = config == null ? null : config.defaultRoomTemplate;
             var maxSpectators = template == null ? config == null ? 20 : config.maxSpectators : template.maxSpectators;
-            var gomokuRules = template == null ? null : template.gomokuRules;
-            if (gomokuRules != null && !gomokuRules.allowSpectators)
+            var rules = template == null ? null : template.rules;
+            if (rules != null && !rules.AllowsSpectators)
             {
                 SendError(conn, "This room does not allow spectators.", MultiplayerErrorCode.SpectatorNotAllowed);
                 return;
@@ -842,7 +842,7 @@ namespace Socket.Multiplayer
         {
             var configuredMinimum = config == null ? 1 : config.EffectiveMinPlayers;
             var template = config == null ? null : config.defaultRoomTemplate;
-            return template != null && template.gomokuRules != null
+            return template != null && template.rules != null
                 ? Math.Max(2, configuredMinimum)
                 : configuredMinimum;
         }
@@ -856,7 +856,7 @@ namespace Socket.Multiplayer
         private bool HasRoomMatch()
         {
             var template = config == null ? null : config.defaultRoomTemplate;
-            return template != null && template.gomokuRules != null;
+            return template != null && template.rules != null;
         }
 
         [Server]

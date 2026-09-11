@@ -148,7 +148,8 @@ namespace Socket.Multiplayer
             {
                 var size = 15;
                 var template = manager.Config == null ? null : manager.Config.defaultRoomTemplate;
-                if (template != null && template.gomokuRules != null) size = template.gomokuRules.boardSize;
+                var ruleConfig = template == null ? null : template.rules as GomokuRuleConfig;
+                if (ruleConfig != null) size = ruleConfig.boardSize;
                 BuildBoardGrid(size);
             }
             if (boardSignature == "empty") return;

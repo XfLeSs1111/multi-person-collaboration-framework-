@@ -97,7 +97,8 @@ namespace Socket.Multiplayer
         private GomokuRuleset ResolveReplayRuleset()
         {
             var template = manager.Config == null ? null : manager.Config.defaultRoomTemplate;
-            if (template != null && template.gomokuRules != null) return template.gomokuRules.CreateRuleset();
+            var ruleConfig = template == null ? null : template.rules as GomokuRuleConfig;
+            if (ruleConfig != null) return ruleConfig.CreateRuleset();
             return new GomokuRuleset(15, 5, true, true, false);
         }
     }

@@ -41,12 +41,8 @@ namespace Socket.Multiplayer
                 Add(ref hash, template.minPlayers.ToString(CultureInfo.InvariantCulture));
                 Add(ref hash, template.maxPlayers.ToString(CultureInfo.InvariantCulture));
                 Add(ref hash, template.maxSpectators.ToString(CultureInfo.InvariantCulture));
-                if (template.gomokuRules != null)
-                {
-                    Add(ref hash, template.gomokuRules.boardSize.ToString(CultureInfo.InvariantCulture));
-                    Add(ref hash, template.gomokuRules.winLength.ToString(CultureInfo.InvariantCulture));
-                    Add(ref hash, template.gomokuRules.allowSpectators.ToString(CultureInfo.InvariantCulture));
-                }
+                if (template.rules != null)
+                    Add(ref hash, template.rules.SignatureFingerprint());
 
                 if (template.playerSpawns != null)
                     foreach (var spawn in template.playerSpawns)
