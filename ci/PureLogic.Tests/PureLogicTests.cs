@@ -179,6 +179,37 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void NameReservation_ReconnectRequiresMatchingToken()
+        {
+            var book = new NameReservationBook();
+            var token = book.Accept("Alice");
+            Assert.IsNotNull(token);
+
+            // 在线时同名再连 → 拒绝
+            Assert.AreEqual(NameAdmission.AlreadyConnected, book.Admit("Alice", token, 100d));
+
+            // 断线进入保留期（凭据保留）
+            book.Release("Alice");
+            book.Reserve("Alice", 200d);
+
+            // 保留期内：无凭据 / 错误凭据 → 拒绝（冒名者）；正确凭据 → 放行并轮换
+            Assert.AreEqual(NameAdmission.ReservedForOwner, book.Admit("Alice", null, 150d));
+            Assert.AreEqual(NameAdmission.ReservedForOwner, book.Admit("Alice", "wrong-token", 150d));
+            Assert.AreEqual(NameAdmission.Accepted, book.Admit("Alice", token, 150d));
+            var renewed = book.Accept("Alice");
+            Assert.AreNotEqual(token, renewed);
+            Assert.AreEqual(renewed, book.TokenFor("Alice"));
+
+            // 窗口过期：保留与旧凭据一并失效（名字可被他人使用，旧凭据不可重放）
+            book.Release("Alice");
+            book.Reserve("Alice", 200d);
+            Assert.AreEqual(1, book.Cleanup(300d));
+            Assert.AreEqual(0, book.ReservationCount);
+            Assert.AreEqual(NameAdmission.Accepted, book.Admit("Alice", null, 300d));
+            Assert.AreEqual(NameAdmission.Accepted, book.Admit("Alice", token, 300d));
+        }
+
+        [Test]
         public void Gomoku_TurnsAndWinCompleteTheMatch()
         {
             var ruleset = new GomokuRuleset(15, 5, true, true, true);

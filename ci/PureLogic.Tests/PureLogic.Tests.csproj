@@ -23,6 +23,7 @@
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/RoomPhase.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/InputAdmission.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/MultiplayerErrorCode.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/NameReservationBook.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/LobbyRoom.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/ConnectionRateLimiter.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/MatchRecords.cs" />

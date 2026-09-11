@@ -12,8 +12,13 @@ namespace Socket.Multiplayer
     /// </summary>
     public sealed class SocketAuthenticator : NetworkAuthenticator
     {
-        private readonly HashSet<string> activeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, double> reservedNames = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>名字占用与重连保留台账（保留期内凭一次性凭据放行原玩家）。</summary>
+        private NameReservationBook book = new NameReservationBook();
+
+        /// <summary>本客户端保存的重连凭据：断线重连时附在认证请求里（同进程内有效）。</summary>
+        private string resumeToken = string.Empty;
+
+        public string ResumeToken => resumeToken;
 
         public string playerName = "Player";
         public string LastError { get; private set; }
@@ -24,6 +29,8 @@ namespace Socket.Multiplayer
             public ushort protocolVersion;
             public string configSignature;
             public string authUsername;
+            /// <summary>断线重连凭据；新玩家为空。</summary>
+            public string resumeToken;
         }
 
         public struct AuthResponseMessage : NetworkMessage
@@ -32,19 +39,20 @@ namespace Socket.Multiplayer
             public string message;
             // Structured counterpart of <see cref="message"/> (M3-S.6).
             public MultiplayerErrorCode errorCode;
+            /// <summary>服务器签发的重连凭据（成功时才有）。</summary>
+            public string resumeToken;
         }
 
         public override void OnStartServer()
         {
-            activeNames.Clear();
+            book = new NameReservationBook();
             NetworkServer.RegisterHandler<AuthRequestMessage>(OnAuthRequestMessage, false);
         }
 
         public override void OnStopServer()
         {
             NetworkServer.UnregisterHandler<AuthRequestMessage>();
-            activeNames.Clear();
-            reservedNames.Clear();
+            book = new NameReservationBook();
         }
 
         public override void OnServerAuthenticate(NetworkConnectionToClient conn) { }
@@ -68,28 +76,29 @@ namespace Socket.Multiplayer
             }
 
             var name = SanitizeName(message.authUsername);
-            CleanupNameReservations(NetworkTime.localTime);
-            if (activeNames.Contains(name))
+            book.Cleanup(NetworkTime.localTime);
+            var admission = book.Admit(name, message.resumeToken, NetworkTime.localTime);
+            if (admission == NameAdmission.AlreadyConnected)
             {
                 Reject(conn, "玩家名称已被使用，请更换名称。", MultiplayerErrorCode.NameTaken);
                 return;
             }
-            if (reservedNames.TryGetValue(name, out var reservedUntil) && reservedUntil > NetworkTime.localTime)
+            if (admission == NameAdmission.ReservedForOwner)
             {
-                Reject(conn, "该名称正在等待原玩家重连，请更换名称或稍后再试。", MultiplayerErrorCode.NameTaken);
+                Reject(conn, "该名称正在等待原玩家重连；请使用原客户端重连，或更换名称。", MultiplayerErrorCode.NameTaken);
                 return;
             }
 
-            reservedNames.Remove(name);
-            activeNames.Add(name);
+            // 签发（并轮换）一次性重连凭据：原客户端会保存它，断线回来后凭它放行。
+            var issuedToken = book.Accept(name);
             conn.authenticationData = name;
-            conn.Send(new AuthResponseMessage { success = true, message = "认证成功" });
+            conn.Send(new AuthResponseMessage { success = true, message = "认证成功", resumeToken = issuedToken });
             ServerAccept(conn);
         }
 
         public void ReleaseName(string name)
         {
-            if (!string.IsNullOrWhiteSpace(name)) activeNames.Remove(name.Trim());
+            if (!string.IsNullOrWhiteSpace(name)) book.Release(name.Trim());
         }
 
         /// <summary>
@@ -98,22 +107,11 @@ namespace Socket.Multiplayer
         /// </summary>
         public void ReserveName(string name, double until)
         {
-            if (!string.IsNullOrWhiteSpace(name)) reservedNames[name.Trim()] = until;
+            if (!string.IsNullOrWhiteSpace(name)) book.Reserve(name.Trim(), until);
         }
 
         /// <summary>Releases name reservations whose reconnect window has lapsed.</summary>
-        public void CleanupNameReservations(double now)
-        {
-            List<string> stale = null;
-            foreach (var pair in reservedNames)
-            {
-                if (pair.Value > now) continue;
-                stale = stale ?? new List<string>();
-                stale.Add(pair.Key);
-            }
-            if (stale != null)
-                foreach (var key in stale) reservedNames.Remove(key);
-        }
+        public void CleanupNameReservations(double now) => book.Cleanup(now);
 
         public override void OnStartClient()
         {
@@ -134,7 +132,8 @@ namespace Socket.Multiplayer
             {
                 protocolVersion = MultiplayerProtocol.Version,
                 configSignature = MultiplayerProtocol.GetConfigSignature(manager == null ? null : manager.Config),
-                authUsername = playerName
+                authUsername = playerName,
+                resumeToken = resumeToken
             });
         }
 
@@ -144,6 +143,8 @@ namespace Socket.Multiplayer
             {
                 LastError = string.Empty;
                 LastErrorCode = MultiplayerErrorCode.None;
+                // 保存服务器签发的重连凭据：断线后凭它回到原座位（名字相同不足以证明身份）。
+                if (!string.IsNullOrEmpty(message.resumeToken)) resumeToken = message.resumeToken;
                 ClientAccept();
             }
             else

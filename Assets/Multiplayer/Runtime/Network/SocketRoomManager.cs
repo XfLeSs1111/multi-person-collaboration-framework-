@@ -232,11 +232,10 @@ namespace Socket.Multiplayer
 
             if (authenticator is SocketAuthenticator socketAuthenticator && !string.IsNullOrWhiteSpace(stableId))
             {
-                // Reserve the name for the window so nobody can steal the seat's identity.
-                if (reserved)
-                    socketAuthenticator.ReserveName(stableId, now + window);
-                else
-                    socketAuthenticator.ReleaseName(stableId);
+                // 断开必须释放“已连接”占用：否则同名者（含本人）再也回不来。
+                // 保留期改由 Reservation 保护，且放行条件是**一次性凭据**匹配，而不是名字相同。
+                socketAuthenticator.ReleaseName(stableId);
+                if (reserved) socketAuthenticator.ReserveName(stableId, now + window);
             }
 
             base.OnServerDisconnect(conn);
