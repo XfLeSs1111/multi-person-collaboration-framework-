@@ -2,7 +2,7 @@ using System;
 
 namespace Socket.Multiplayer
 {
-    public sealed class GomokuRules : IMatchRules<GomokuState, PlaceStoneCommand, GomokuEvent>, IMatchEventApplier<GomokuState, GomokuEvent>
+    public sealed class GomokuRules : IMatchRules<GomokuState, PlaceStoneCommand, GomokuEvent>, IMatchEventApplier<GomokuState, GomokuEvent>, IMatchForfeitRules<GomokuState, GomokuEvent>
     {
         private readonly GomokuRuleset ruleset;
 
@@ -29,9 +29,35 @@ namespace Socket.Multiplayer
 
         public bool IsFinished(GomokuState state) => state != null && state.Result != GomokuResult.None;
 
+        /// <summary>
+        /// A seated player who leaves loses: the opponent takes the win and the match
+        /// completes instead of deadlocking on a turn its owner will never take.
+        /// Extra room members without a duel seat (index &gt; 1) cannot command anyway,
+        /// so their departure does not decide the match.
+        /// </summary>
+        public bool TryForfeit(GomokuState state, MatchParticipant leaver, out GomokuEvent finalEvent)
+        {
+            finalEvent = default;
+            if (state == null || leaver == null) return false;
+            if (state.Result != GomokuResult.None) return false;
+            if (leaver.SeatIndex != 0 && leaver.SeatIndex != 1) return false;
+
+            var result = leaver.SeatIndex == 0 ? GomokuResult.WhiteWin : GomokuResult.BlackWin;
+            state.SetResult(result);
+            finalEvent = new GomokuEvent(GomokuEventKind.MatchEnded, leaver.StableId, GomokuCell.Empty, -1, state.Turn, result);
+            return true;
+        }
+
         public void Apply(GomokuState state, GomokuEvent gameEvent)
         {
-            if (state == null || gameEvent.Kind != GomokuEventKind.StonePlaced) return;
+            if (state == null) return;
+            if (gameEvent.Kind == GomokuEventKind.MatchEnded)
+            {
+                // Forfeit end: replay restores the result without a placement.
+                if (gameEvent.Result != GomokuResult.None) state.SetResult(gameEvent.Result);
+                return;
+            }
+            if (gameEvent.Kind != GomokuEventKind.StonePlaced) return;
             if (state.GetCell(gameEvent.CellIndex) != GomokuCell.Empty) return;
             if (gameEvent.Cell == GomokuCell.Empty) return;
             state.Place(gameEvent.CellIndex, gameEvent.Cell);

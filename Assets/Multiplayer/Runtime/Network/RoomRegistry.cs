@@ -85,23 +85,27 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryCreateRoom(int connectionId, string name, int maxPlayers, out Room room, out string error)
+        public bool TryCreateRoom(int connectionId, string name, int maxPlayers, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out var player))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             if (player.RoomId != LobbyRoom.Id)
             {
                 error = "Player is already in a room.";
+                errorCode = MultiplayerErrorCode.AlreadyInRoom;
                 return false;
             }
             if (_rooms.Count >= _maxRooms)
             {
                 error = "Room limit reached.";
+                errorCode = MultiplayerErrorCode.RoomLimitReached;
                 return false;
             }
 
@@ -118,33 +122,39 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryJoinRoom(int connectionId, Guid roomId, bool allowLateJoiners, out Room room, out string error)
+        public bool TryJoinRoom(int connectionId, Guid roomId, bool allowLateJoiners, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out var player))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             if (!_rooms.TryGetValue(roomId, out room))
             {
                 error = "Room does not exist.";
+                errorCode = MultiplayerErrorCode.RoomNotFound;
                 return false;
             }
             if (player.RoomId != LobbyRoom.Id)
             {
                 error = "Player is already in a room.";
+                errorCode = MultiplayerErrorCode.AlreadyInRoom;
                 return false;
             }
             if (room.Phase != RoomPhase.Lobby && !allowLateJoiners)
             {
                 error = "Room has already started.";
+                errorCode = MultiplayerErrorCode.RoomStarted;
                 return false;
             }
             if (room.PlayerIds.Count >= room.MaxPlayers)
             {
                 error = "Room is full.";
+                errorCode = MultiplayerErrorCode.RoomFull;
                 return false;
             }
 
@@ -153,34 +163,40 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryJoinRoomAsSpectator(int connectionId, Guid roomId, int maxSpectators, out Room room, out string error)
+        public bool TryJoinRoomAsSpectator(int connectionId, Guid roomId, int maxSpectators, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out var player))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             if (!_rooms.TryGetValue(roomId, out room))
             {
                 error = "Room does not exist.";
+                errorCode = MultiplayerErrorCode.RoomNotFound;
                 return false;
             }
             if (player.RoomId != LobbyRoom.Id)
             {
                 error = "Player is already in a room.";
+                errorCode = MultiplayerErrorCode.AlreadyInRoom;
                 return false;
             }
             if (room.Phase == RoomPhase.Lobby)
             {
                 error = "Room has not started.";
+                errorCode = MultiplayerErrorCode.RoomNotStarted;
                 return false;
             }
 
             if (room.SpectatorIds.Count >= Math.Max(0, maxSpectators))
             {
                 error = "Spectator limit reached.";
+                errorCode = MultiplayerErrorCode.SpectatorLimitReached;
                 return false;
             }
 
@@ -199,20 +215,23 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryLeaveRoom(int connectionId, out Guid roomId, out bool roomRemoved, out string error)
+        public bool TryLeaveRoom(int connectionId, out Guid roomId, out bool roomRemoved, out string error, out MultiplayerErrorCode errorCode)
         {
             roomId = LobbyRoom.Id;
             roomRemoved = false;
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out var player))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             roomId = player.RoomId;
             if (roomId == LobbyRoom.Id || !_rooms.TryGetValue(roomId, out var room))
             {
                 error = "Player is not in a room.";
+                errorCode = MultiplayerErrorCode.NotInRoom;
                 return false;
             }
 
@@ -228,25 +247,29 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryCancelRoom(int connectionId, out Guid roomId, out int[] affectedPlayers, out string error)
+        public bool TryCancelRoom(int connectionId, out Guid roomId, out int[] affectedPlayers, out string error, out MultiplayerErrorCode errorCode)
         {
             roomId = LobbyRoom.Id;
             affectedPlayers = Array.Empty<int>();
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out var requester))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             roomId = requester.RoomId;
             if (roomId == LobbyRoom.Id || !_rooms.TryGetValue(roomId, out var room))
             {
                 error = "Player is not in a room.";
+                errorCode = MultiplayerErrorCode.NotInRoom;
                 return false;
             }
             if (!requester.IsLeader)
             {
                 error = "Only the room leader can cancel the room.";
+                errorCode = MultiplayerErrorCode.NotLeader;
                 return false;
             }
 
@@ -258,67 +281,75 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryToggleReady(int connectionId, out Room room, out string error)
+        public bool TryToggleReady(int connectionId, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
-            if (!TryGetPlayerRoom(connectionId, out var player, out room, out error)) return false;
+            if (!TryGetPlayerRoom(connectionId, out var player, out room, out error, out errorCode)) return false;
             if (player.IsSpectator)
             {
                 error = "Spectators cannot change ready state.";
+                errorCode = MultiplayerErrorCode.SpectatorCannotReady;
                 return false;
             }
             if (room.Phase != RoomPhase.Lobby)
             {
                 error = "Ready state can only change in the lobby.";
+                errorCode = MultiplayerErrorCode.ReadyOnlyInLobby;
                 return false;
             }
             player.Ready = !player.Ready;
             return true;
         }
 
-        public bool TrySetReady(int connectionId, bool value, out Room room, out string error)
+        public bool TrySetReady(int connectionId, bool value, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
-            if (!TryGetPlayerRoom(connectionId, out var player, out room, out error)) return false;
+            if (!TryGetPlayerRoom(connectionId, out var player, out room, out error, out errorCode)) return false;
             if (player.IsSpectator)
             {
                 error = "Spectators cannot change ready state.";
+                errorCode = MultiplayerErrorCode.SpectatorCannotReady;
                 return false;
             }
             if (room.Phase != RoomPhase.Lobby)
             {
                 error = "Ready state can only change in the lobby.";
+                errorCode = MultiplayerErrorCode.ReadyOnlyInLobby;
                 return false;
             }
             player.Ready = value;
             return true;
         }
 
-        public bool TryStartRoom(int connectionId, int minPlayers, out Room room, out string error)
+        public bool TryStartRoom(int connectionId, int minPlayers, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
-            if (!TryGetPlayerRoom(connectionId, out var requester, out room, out error)) return false;
+            if (!TryGetPlayerRoom(connectionId, out var requester, out room, out error, out errorCode)) return false;
             if (!requester.IsLeader)
             {
                 error = "Only the room leader can start the room.";
+                errorCode = MultiplayerErrorCode.NotLeader;
                 return false;
             }
             if (room.Phase != RoomPhase.Lobby)
             {
                 error = "Room has already started.";
+                errorCode = MultiplayerErrorCode.RoomStarted;
                 return false;
             }
             if (room.PlayerIds.Count < Math.Max(1, minPlayers))
             {
                 error = "Not enough players.";
+                errorCode = MultiplayerErrorCode.NotEnoughPlayers;
                 return false;
             }
             if (room.PlayerIds.Any(id => !_players[id].Ready))
             {
                 error = "All players must be ready.";
+                errorCode = MultiplayerErrorCode.NotAllReady;
                 return false;
             }
 
@@ -326,19 +357,21 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool TryReturnToLobby(int connectionId, out Room room, out string error)
+        public bool TryReturnToLobby(int connectionId, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             room = null;
             error = string.Empty;
-            if (!TryGetPlayerRoom(connectionId, out var requester, out room, out error)) return false;
+            if (!TryGetPlayerRoom(connectionId, out var requester, out room, out error, out errorCode)) return false;
             if (!requester.IsLeader)
             {
                 error = "Only the room leader can return to the lobby.";
+                errorCode = MultiplayerErrorCode.NotLeader;
                 return false;
             }
             if (room.Phase != RoomPhase.InGame)
             {
                 error = "Room is already in the lobby.";
+                errorCode = MultiplayerErrorCode.AlreadyInLobby;
                 return false;
             }
 
@@ -348,25 +381,41 @@ namespace Socket.Multiplayer
             return true;
         }
 
+        /// <summary>
+        /// Reverts an InGame room to Lobby when the match adapter failed to start,
+        /// so the room does not stay stuck in InGame without a running match.
+        /// </summary>
+        public bool RollbackStart(Guid roomId)
+        {
+            if (!_rooms.TryGetValue(roomId, out var room) || room.Phase != RoomPhase.InGame) return false;
+            room.Phase = RoomPhase.Lobby;
+            foreach (var playerId in room.PlayerIds)
+                if (_players.TryGetValue(playerId, out var player)) player.Ready = false;
+            return true;
+        }
+
         public bool TryGetPlayer(int connectionId, out Player player) =>
             _players.TryGetValue(connectionId, out player);
 
         public bool TryGetRoom(Guid roomId, out Room room) =>
             _rooms.TryGetValue(roomId, out room);
 
-        private bool TryGetPlayerRoom(int connectionId, out Player player, out Room room, out string error)
+        private bool TryGetPlayerRoom(int connectionId, out Player player, out Room room, out string error, out MultiplayerErrorCode errorCode)
         {
             player = null;
             room = null;
             error = string.Empty;
+            errorCode = MultiplayerErrorCode.None;
             if (!_players.TryGetValue(connectionId, out player))
             {
                 error = "Player is not registered.";
+                errorCode = MultiplayerErrorCode.NotRegistered;
                 return false;
             }
             if (player.RoomId == LobbyRoom.Id || !_rooms.TryGetValue(player.RoomId, out room))
             {
                 error = "Player is not in a room.";
+                errorCode = MultiplayerErrorCode.NotInRoom;
                 return false;
             }
             return true;

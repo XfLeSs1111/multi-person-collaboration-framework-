@@ -131,6 +131,8 @@ namespace Socket.Multiplayer
         public void CmdRequestInteract(NetworkInteractable target)
         {
             if (spectator) return;
+            if (NetworkManager.singleton is SocketRoomManager rateManager &&
+                !rateManager.ServerTryConsumeRate(connectionToClient.connectionId, RateLimitKind.Interact)) return;
             if (target != null) target.ServerTryAcquire(this);
         }
 

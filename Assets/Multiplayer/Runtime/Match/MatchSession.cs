@@ -47,6 +47,28 @@ namespace Socket.Multiplayer
             return participants.TryGetValue(stableId, out var participant) && SetConnection(participant, connected);
         }
 
+        /// <summary>
+        /// Ends an active match because a seated participant left (disconnect or quit).
+        /// Without this the remaining players deadlock on a turn that can never come
+        /// (Gomoku only advances the seat on a placement). Scoring is delegated to
+        /// <see cref="IMatchForfeitRules{TState,TEvent}"/> and the final event flows
+        /// through the same sinks and EventConfirmed as regular commands.
+        /// </summary>
+        public bool Forfeit(string stableId, double serverTime)
+        {
+            if (Phase != MatchPhase.Active) return false;
+            if (stableId == null || !participants.TryGetValue(stableId, out var leaver)) return false;
+            if (leaver.Role != MatchParticipantRole.Player) return false;
+            if (!(rules is IMatchForfeitRules<TState, TEvent> forfeitRules)) return false;
+            if (!forfeitRules.TryForfeit(state, leaver, out var finalEvent)) return false;
+
+            Phase = MatchPhase.Completed;
+            var record = new MatchEventRecord<TEvent>(++eventSequence, serverTime, finalEvent);
+            foreach (var sink in eventSinks.ToArray()) sink.Append(record);
+            EventConfirmed?.Invoke(record);
+            return true;
+        }
+
         public bool Start()
         {
             if (Phase != MatchPhase.Waiting) return false;

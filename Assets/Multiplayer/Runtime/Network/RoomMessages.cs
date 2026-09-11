@@ -24,6 +24,9 @@ namespace Socket.Multiplayer
         public Guid roomId;
         public RoomPhase phase;
         public string error;
+        // Structured counterpart of <see cref="error"/> (M3-S.6). The string is kept
+        // for logs; clients should switch on the code for user-facing messages.
+        public MultiplayerErrorCode errorCode;
         public RoomInfo[] roomInfos;
         public PlayerInfo[] playerInfos;
     }

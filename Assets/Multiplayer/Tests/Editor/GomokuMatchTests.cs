@@ -70,6 +70,41 @@ namespace Socket.Multiplayer.Tests
             Assert.AreEqual(GomokuCell.Black, session.State.GetCell(0));
         }
 
+        [Test]
+        public void LeavingSeatedPlayerForfeitsTheMatchInsteadOfDeadlocking()
+        {
+            var state = new GomokuState(15);
+            var session = CreateSession(state);
+            var store = new InMemoryMatchEventStore<GomokuEvent>();
+            session.AttachEventSink(store);
+
+            Assert.IsTrue(session.Forfeit("alice", 2d));
+
+            Assert.AreEqual(MatchPhase.Completed, session.Phase);
+            Assert.AreEqual(GomokuResult.WhiteWin, state.Result);
+            Assert.IsFalse(session.Submit("bob", new PlaceStoneCommand(0), 3d).Accepted);
+            Assert.AreEqual(1, store.Records.Count);
+            Assert.AreEqual(GomokuEventKind.MatchEnded, store.Records[0].Event.Kind);
+        }
+
+        [Test]
+        public void ForfeitIgnoresSpectatorsUnknownIdsAndWaitingMatches()
+        {
+            // Waiting match: forfeit is not applicable until play starts.
+            var waitingSession = new MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent>(
+                Guid.NewGuid(), new GomokuState(15), new GomokuRules(Ruleset));
+            waitingSession.AddParticipant(new MatchParticipant("alice", "Alice", 0, MatchParticipantRole.Player));
+            waitingSession.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
+            Assert.IsFalse(waitingSession.Forfeit("alice", 1d));
+
+            var state = new GomokuState(15);
+            var session = CreateSession(state);
+            Assert.IsTrue(session.AddParticipant(new MatchParticipant("viewer", "Viewer", -1, MatchParticipantRole.Spectator)));
+            Assert.IsFalse(session.Forfeit("viewer", 1d));
+            Assert.IsFalse(session.Forfeit("unknown", 1d));
+            Assert.AreEqual(MatchPhase.Active, session.Phase);
+        }
+
         private static MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent> CreateSession(
             GomokuState state,
             GomokuRules rules = null)

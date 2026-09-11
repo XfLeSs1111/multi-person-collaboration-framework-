@@ -4,7 +4,11 @@ namespace Socket.Multiplayer
 {
     public static class MultiplayerProtocol
     {
-        public const ushort Version = 3;
+        // Protocol version changelog (M3-S.6). Bump whenever NetworkMessage layouts change.
+        //   4 — added MultiplayerErrorCode to ClientRoomMessage and AuthResponseMessage
+        //   earlier revisions predate this changelog (room protocol, multi-room routing,
+        //   auth handshake with protocol version + config signature)
+        public const ushort Version = 4;
 
         public static string GetConfigSignature(MultiplayerConfig config)
         {

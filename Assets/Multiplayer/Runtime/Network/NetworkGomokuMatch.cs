@@ -78,6 +78,28 @@ namespace Socket.Multiplayer
             session?.RemoveParticipant(stableId);
         }
 
+        /// <summary>
+        /// Marks a participant as gone. While the match is active a seated leaver
+        /// forfeits (otherwise the remaining player can never move again); while the
+        /// match waits in the lobby the participant is removed from the roster.
+        /// </summary>
+        [Server]
+        public void ServerHandleParticipantLeft(string stableId)
+        {
+            if (session == null || string.IsNullOrEmpty(stableId)) return;
+
+            if (session.Phase == MatchPhase.Active)
+            {
+                var forfeited = session.Forfeit(stableId, NetworkTime.localTime);
+                session.SetParticipantConnection(stableId, false);
+                if (forfeited) RefreshSnapshot();
+                return;
+            }
+
+            session.SetParticipantConnection(stableId, false);
+            if (session.Phase == MatchPhase.Waiting) session.RemoveParticipant(stableId);
+        }
+
         [Server]
         public void ServerResetMatch()
         {
@@ -105,6 +127,9 @@ namespace Socket.Multiplayer
             if (!isServer || sender == null || sender.identity == null) return;
             if (!sender.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
             if (player.IsSpectator) return;
+            // Rule rejections are cheap to spam; cap the source before touching the kernel.
+            if (NetworkManager.singleton is SocketRoomManager rateManager &&
+                !rateManager.ServerTryConsumeRate(sender.connectionId, RateLimitKind.GameCommand)) return;
 
             var result = session == null
                 ? MatchCommandResult<GomokuEvent>.Reject("Match is not initialized.")

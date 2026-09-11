@@ -14,8 +14,8 @@ namespace Socket.Multiplayer.Tests
             Assert.IsTrue(registry.TryAddPlayer(1, "Alice", out _));
             Assert.IsTrue(registry.TryAddPlayer(2, "Bob", out _));
 
-            Assert.IsTrue(registry.TryCreateRoom(1, "Room A", 2, out var room, out _));
-            Assert.IsTrue(registry.TryJoinRoom(2, room.Id, false, out _, out _));
+            Assert.IsTrue(registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _));
+            Assert.IsTrue(registry.TryJoinRoom(2, room.Id, false, out _, out _, out _));
 
             Assert.AreEqual(2, room.PlayerCount);
             Assert.IsTrue(registry.TryGetPlayer(1, out var leader));
@@ -32,13 +32,14 @@ namespace Socket.Multiplayer.Tests
             var registry = new RoomRegistry();
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
-            registry.TryCreateRoom(1, "Room A", 2, out var room, out _);
-            registry.TryJoinRoom(2, room.Id, false, out _, out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
 
-            Assert.IsFalse(registry.TryStartRoom(1, 2, out _, out _));
-            registry.TrySetReady(1, true, out _, out _);
-            registry.TrySetReady(2, true, out _, out _);
-            Assert.IsTrue(registry.TryStartRoom(1, 2, out room, out _));
+            Assert.IsFalse(registry.TryStartRoom(1, 2, out _, out _, out var notReadyCode));
+            Assert.AreEqual(MultiplayerErrorCode.NotAllReady, notReadyCode);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out room, out _, out _));
             Assert.AreEqual(RoomPhase.InGame, room.Phase);
         }
 
@@ -48,15 +49,15 @@ namespace Socket.Multiplayer.Tests
             var registry = new RoomRegistry();
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
-            registry.TryCreateRoom(1, "Room A", 2, out var room, out _);
-            registry.TryJoinRoom(2, room.Id, false, out _, out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
 
-            Assert.IsTrue(registry.TryLeaveRoom(1, out _, out var roomRemoved, out _));
+            Assert.IsTrue(registry.TryLeaveRoom(1, out _, out var roomRemoved, out _, out _));
             Assert.IsFalse(roomRemoved);
             Assert.IsTrue(registry.TryGetPlayer(2, out var nextLeader));
             Assert.IsTrue(nextLeader.IsLeader);
 
-            Assert.IsTrue(registry.TryLeaveRoom(2, out var removedRoomId, out roomRemoved, out _));
+            Assert.IsTrue(registry.TryLeaveRoom(2, out var removedRoomId, out roomRemoved, out _, out _));
             Assert.IsTrue(roomRemoved);
             Assert.AreEqual(room.Id, removedRoomId);
             Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
@@ -68,8 +69,8 @@ namespace Socket.Multiplayer.Tests
             var registry = new RoomRegistry(2);
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
-            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out var first, out _));
-            Assert.IsTrue(registry.TryCreateRoom(2, "B", 2, out var second, out _));
+            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out var first, out _, out _));
+            Assert.IsTrue(registry.TryCreateRoom(2, "B", 2, out var second, out _, out _));
             Assert.AreNotEqual(Guid.Empty, first.Id);
             Assert.AreNotEqual(first.Id, second.Id);
         }
@@ -81,8 +82,8 @@ namespace Socket.Multiplayer.Tests
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
 
-            Assert.IsTrue(registry.TryCreateRoom(1, "A", 1, out var first, out _));
-            Assert.IsTrue(registry.TryCreateRoom(2, "B", 1, out var second, out _));
+            Assert.IsTrue(registry.TryCreateRoom(1, "A", 1, out var first, out _, out _));
+            Assert.IsTrue(registry.TryCreateRoom(2, "B", 1, out var second, out _, out _));
             Assert.AreEqual(1, first.MaxPlayers);
             Assert.AreEqual(1, second.MaxPlayers);
             Assert.AreEqual(1, first.PlayerCount);
@@ -96,9 +97,10 @@ namespace Socket.Multiplayer.Tests
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
 
-            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out _, out _));
-            Assert.IsFalse(registry.TryCreateRoom(2, "B", 2, out _, out var error));
+            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out _, out _, out _));
+            Assert.IsFalse(registry.TryCreateRoom(2, "B", 2, out _, out var error, out var errorCode));
             Assert.AreEqual("Room limit reached.", error);
+            Assert.AreEqual(MultiplayerErrorCode.RoomLimitReached, errorCode);
         }
 
         [Test]
@@ -175,17 +177,18 @@ namespace Socket.Multiplayer.Tests
             registry.TryAddPlayer(1, "Alice", out _);
             registry.TryAddPlayer(2, "Bob", out _);
             registry.TryAddPlayer(3, "Viewer", out _);
-            registry.TryCreateRoom(1, "Room", 2, out var room, out _);
-            registry.TryJoinRoom(2, room.Id, false, out _, out _);
-            registry.TrySetReady(1, true, out _, out _);
-            registry.TrySetReady(2, true, out _, out _);
-            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _));
+            registry.TryCreateRoom(1, "Room", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _, out _));
 
-            Assert.IsTrue(registry.TryJoinRoomAsSpectator(3, room.Id, 1, out room, out _));
+            Assert.IsTrue(registry.TryJoinRoomAsSpectator(3, room.Id, 1, out room, out _, out _));
             Assert.AreEqual(2, room.PlayerCount);
             Assert.AreEqual(1, room.SpectatorCount);
             Assert.AreEqual(3, room.MemberCount);
-            Assert.IsFalse(registry.TryJoinRoomAsSpectator(1, room.Id, 1, out _, out _));
+            Assert.IsFalse(registry.TryJoinRoomAsSpectator(1, room.Id, 1, out _, out _, out var code));
+            Assert.AreEqual(MultiplayerErrorCode.AlreadyInRoom, code);
         }
     }
 }

@@ -95,6 +95,10 @@ namespace Socket.Multiplayer.Editor
             config.lobbyScene = "Assets/MultiplayerGenerated/Scenes/Lobby.unity";
             config.autoStartWhenAllReady = false;
             config.allowLateJoiners = false;
+            config.roomCommandPerSecond = 2f;
+            config.chatPerSecond = 2f;
+            config.interactPerSecond = 2f;
+            config.gameCommandPerSecond = 4f;
             EditorUtility.SetDirty(config);
             return config;
         }

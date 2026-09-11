@@ -16,6 +16,7 @@ namespace Socket.Multiplayer
 
         public string playerName = "Player";
         public string LastError { get; private set; }
+        public MultiplayerErrorCode LastErrorCode { get; private set; }
 
         public struct AuthRequestMessage : NetworkMessage
         {
@@ -28,6 +29,8 @@ namespace Socket.Multiplayer
         {
             public bool success;
             public string message;
+            // Structured counterpart of <see cref="message"/> (M3-S.6).
+            public MultiplayerErrorCode errorCode;
         }
 
         public override void OnStartServer()
@@ -52,20 +55,20 @@ namespace Socket.Multiplayer
             var expectedSignature = MultiplayerProtocol.GetConfigSignature(manager == null ? null : manager.Config);
             if (message.protocolVersion != MultiplayerProtocol.Version)
             {
-                Reject(conn, $"协议版本不兼容：客户端 {message.protocolVersion}，服务器 {MultiplayerProtocol.Version}。" );
+                Reject(conn, $"协议版本不兼容：客户端 {message.protocolVersion}，服务器 {MultiplayerProtocol.Version}。", MultiplayerErrorCode.ProtocolMismatch);
                 return;
             }
 
             if (!string.Equals(message.configSignature, expectedSignature, StringComparison.Ordinal))
             {
-                Reject(conn, "联机配置不一致，请使用同一份房间模板和配置资源。" );
+                Reject(conn, "联机配置不一致，请使用同一份房间模板和配置资源。", MultiplayerErrorCode.ConfigMismatch);
                 return;
             }
 
             var name = SanitizeName(message.authUsername);
             if (activeNames.Contains(name))
             {
-                Reject(conn, "玩家名称已被使用，请更换名称。" );
+                Reject(conn, "玩家名称已被使用，请更换名称。", MultiplayerErrorCode.NameTaken);
                 return;
             }
 
@@ -83,6 +86,7 @@ namespace Socket.Multiplayer
         public override void OnStartClient()
         {
             LastError = string.Empty;
+            LastErrorCode = MultiplayerErrorCode.None;
             NetworkClient.RegisterHandler<AuthResponseMessage>(OnAuthResponseMessage, false);
         }
 
@@ -107,20 +111,22 @@ namespace Socket.Multiplayer
             if (message.success)
             {
                 LastError = string.Empty;
+                LastErrorCode = MultiplayerErrorCode.None;
                 ClientAccept();
             }
             else
             {
                 LastError = message.message ?? "认证失败";
-                UnityEngine.Debug.LogError($"多人联机认证失败：{LastError}");
+                LastErrorCode = message.errorCode;
+                UnityEngine.Debug.LogError($"多人联机认证失败：{LastError} ({LastErrorCode})");
                 ClientReject();
             }
         }
 
-        private void Reject(NetworkConnectionToClient conn, string message)
+        private void Reject(NetworkConnectionToClient conn, string message, MultiplayerErrorCode errorCode)
         {
             conn.isAuthenticated = false;
-            conn.Send(new AuthResponseMessage { success = false, message = message });
+            conn.Send(new AuthResponseMessage { success = false, message = message, errorCode = errorCode });
             StartCoroutine(RejectAfterDelay(conn));
         }
 

@@ -29,6 +29,8 @@ namespace Socket.Multiplayer
         public void CmdSend(string body, NetworkConnectionToClient sender = null)
         {
             if (sender == null || sender.identity == null) return;
+            if (NetworkManager.singleton is SocketRoomManager rateManager &&
+                !rateManager.ServerTryConsumeRate(sender.connectionId, RateLimitKind.Chat)) return;
             body = Sanitize(body);
             if (string.IsNullOrEmpty(body)) return;
 

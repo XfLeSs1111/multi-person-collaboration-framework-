@@ -50,6 +50,17 @@ namespace Socket.Multiplayer
         bool IsFinished(TState state);
     }
 
+    /// <summary>
+    /// Optional companion to <see cref="IMatchRules{TState,TCommand,TEvent}"/>: how an
+    /// active match ends when a seated participant leaves (disconnect or quit). Without
+    /// it the remaining players deadlock on a turn that can never come. The rules map
+    /// the leaver to a game-specific result and produce the final confirmed event.
+    /// </summary>
+    public interface IMatchForfeitRules<TState, TEvent>
+    {
+        bool TryForfeit(TState state, MatchParticipant leaver, out TEvent finalEvent);
+    }
+
     public interface IMatchEventSink<TEvent>
     {
         void Append(MatchEventRecord<TEvent> record);

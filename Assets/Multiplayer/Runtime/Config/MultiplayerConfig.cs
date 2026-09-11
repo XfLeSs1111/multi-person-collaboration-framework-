@@ -122,6 +122,30 @@ namespace Socket.Multiplayer
         [Tooltip("局域网服务器停止发送心跳后，在发现列表中继续保留的时间。")]
         public float serverTtl = 3f;
 
+        [TabGroup("配置分区", "网络")]
+        [PropertySpace(SpaceBefore = 8)]
+        [InfoBox("服务端限频（M3-S.5）：各入口每连接的令牌桶速率，容量为速率的两倍以吸收点击突发。")]
+        [HorizontalGroup("配置分区/网络/服务端限频", LabelWidth = 88)]
+        [LabelText("房间操作/秒"), MinValue(0.5f), SuffixLabel("次/秒")]
+        [Tooltip("创建/加入/准备/开始/返回等房间消息的单连接速率上限。")]
+        public float roomCommandPerSecond = 2f;
+
+        [TabGroup("配置分区", "网络")]
+        [HorizontalGroup("配置分区/网络/服务端限频", LabelWidth = 88)]
+        [LabelText("聊天/秒"), MinValue(0.5f), SuffixLabel("次/秒")]
+        public float chatPerSecond = 2f;
+
+        [TabGroup("配置分区", "网络")]
+        [HorizontalGroup("配置分区/网络/服务端限频", LabelWidth = 88)]
+        [LabelText("交互/秒"), MinValue(0.5f), SuffixLabel("次/秒")]
+        public float interactPerSecond = 2f;
+
+        [TabGroup("配置分区", "网络")]
+        [HorizontalGroup("配置分区/网络/服务端限频", LabelWidth = 88)]
+        [LabelText("对局命令/秒"), MinValue(0.5f), SuffixLabel("次/秒")]
+        [Tooltip("落子等对局命令的令牌桶速率；规则拒绝依然生效，此处只防刷。")]
+        public float gameCommandPerSecond = 4f;
+
         [TabGroup("配置分区", "场景")]
         [InfoBox("当前架构只加载一个物理在线场景，各房间通过 MatchInterestManagement 隔离可见性。")]
         [LabelText("离线启动场景"), Scene, Tooltip("停止主机、服务器或客户端后返回的 Bootstrap 场景。")]
@@ -176,6 +200,10 @@ namespace Socket.Multiplayer
             interactionLeaseSeconds = Mathf.Max(0.1f, interactionLeaseSeconds);
             serverTtl = Mathf.Max(0.5f, serverTtl);
             spawnSpacing = Mathf.Max(0.5f, spawnSpacing);
+            roomCommandPerSecond = Mathf.Max(0.5f, roomCommandPerSecond);
+            chatPerSecond = Mathf.Max(0.5f, chatPerSecond);
+            interactPerSecond = Mathf.Max(0.5f, interactPerSecond);
+            gameCommandPerSecond = Mathf.Max(0.5f, gameCommandPerSecond);
         }
     }
 }

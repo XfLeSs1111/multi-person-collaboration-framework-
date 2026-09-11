@@ -37,7 +37,9 @@ namespace Socket.Multiplayer
         private RoomPhase _localPhase = RoomPhase.Lobby;
         private string _localRoomName = string.Empty;
         private string _lastError = string.Empty;
+        private MultiplayerErrorCode _lastErrorCode = MultiplayerErrorCode.None;
         private Guid _pendingRoomId;
+        private ConnectionRateLimiter _rateLimiter;
 
         public event Action RoomStateChanged;
 
@@ -49,6 +51,7 @@ namespace Socket.Multiplayer
         public IReadOnlyList<RoomInfo> AvailableRooms => _availableRooms;
         public IReadOnlyList<PlayerInfo> CurrentPlayers => _currentPlayers;
         public string LastError => _lastError;
+        public MultiplayerErrorCode LastErrorCode => _lastErrorCode;
         public SocketNetworkMetrics Metrics => metrics == null ? metrics = GetComponent<SocketNetworkMetrics>() : metrics;
         public RoomInfo[] GetDiscoveryRooms() => BuildRoomInfos();
 
@@ -128,6 +131,13 @@ namespace Socket.Multiplayer
         {
             base.OnStartServer();
             _registry = new RoomRegistry(config == null ? 16 : config.maxRooms);
+            // Server-only admission policy (M3-S.5); capacities are twice the rates
+            // so short UI bursts pass while sustained spam is rejected.
+            _rateLimiter = new ConnectionRateLimiter(
+                config == null ? 2f : config.roomCommandPerSecond,
+                config == null ? 2f : config.chatPerSecond,
+                config == null ? 2f : config.interactPerSecond,
+                config == null ? 4f : config.gameCommandPerSecond);
             NetworkServer.RegisterHandler<ServerRoomMessage>(OnServerRoomMessage);
         }
 
@@ -147,6 +157,7 @@ namespace Socket.Multiplayer
             _roomMatches.Clear();
             _roomInteractables.Clear();
             _registry = null;
+            _rateLimiter = null;
             base.OnStopServer();
         }
 
@@ -178,6 +189,8 @@ namespace Socket.Multiplayer
         {
             if (conn != null && authenticator is SocketAuthenticator socketAuthenticator)
                 socketAuthenticator.ReleaseName(conn.authenticationData as string);
+            // Mirror reuses connection ids; a fresh client must not inherit exhausted buckets.
+            _rateLimiter?.Forget(conn.connectionId);
             var previousRoomId = LobbyRoom.Id;
             if (_registry != null && conn != null)
             {
@@ -186,7 +199,7 @@ namespace Socket.Multiplayer
                 {
                     if (_registry.TryGetRoom(previousRoomId, out var previousRoom))
                     {
-                        RemovePlayerFromGomokuMatch(previousRoom, conn);
+                        HandleGomokuParticipantLeft(previousRoom, conn);
                         SyncPlayers(previousRoom);
                     }
                     else
@@ -223,8 +236,18 @@ namespace Socket.Multiplayer
         {
             if (_registry == null || requester == null) return;
             var minimum = GetRequiredMatchPlayers();
-            if (!_registry.TryStartRoom(requester.connectionId, minimum, out var room, out _)) return;
-            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null && !match.ServerStartMatch()) return;
+            if (!_registry.TryStartRoom(requester.connectionId, minimum, out var room, out var error, out var errorCode))
+            {
+                SendError(requester, error, errorCode);
+                return;
+            }
+            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null && !match.ServerStartMatch())
+            {
+                // Do not leave the room stuck InGame without a running match.
+                _registry.RollbackStart(room.Id);
+                SendError(requester, "The match could not be started.", MultiplayerErrorCode.StartFailed);
+                return;
+            }
             SpawnRoomInteractables(room);
             RefreshRoom(room.Id);
             BroadcastClientState(ClientRoomOperation.Started, room.Id);
@@ -234,7 +257,11 @@ namespace Socket.Multiplayer
         public void ServerReturnToLobby(NetworkConnectionToClient requester)
         {
             if (_registry == null || requester == null) return;
-            if (!_registry.TryReturnToLobby(requester.connectionId, out var room, out _)) return;
+            if (!_registry.TryReturnToLobby(requester.connectionId, out var room, out var error, out var errorCode))
+            {
+                SendError(requester, error, errorCode);
+                return;
+            }
             DestroyRoomInteractables(room.Id);
             if (_roomMatches.TryGetValue(room.Id, out var match) && match != null)
                 match.ServerResetMatch();
@@ -248,9 +275,14 @@ namespace Socket.Multiplayer
         private void OnServerRoomMessage(NetworkConnectionToClient conn, ServerRoomMessage message)
         {
             if (_registry == null || conn == null) return;
+            if (!ServerTryConsumeRate(conn.connectionId, RateLimitKind.RoomOperation))
+            {
+                SendError(conn, "Too many room requests.", MultiplayerErrorCode.RateLimited);
+                return;
+            }
             if (!_registry.TryGetPlayer(conn.connectionId, out _))
             {
-                SendError(conn, "Player is not ready.");
+                SendError(conn, "Player is not ready.", MultiplayerErrorCode.NotRegistered);
                 return;
             }
 
@@ -281,7 +313,7 @@ namespace Socket.Multiplayer
                     ServerReturnToLobby(conn);
                     break;
                 default:
-                    SendError(conn, "Unknown room operation.");
+                    SendError(conn, "Unknown room operation.", MultiplayerErrorCode.UnknownOperation);
                     break;
             }
         }
@@ -290,9 +322,9 @@ namespace Socket.Multiplayer
         private void CreateRoom(NetworkConnectionToClient conn, string requestedName)
         {
             var name = SanitizeRoomName(requestedName);
-            if (!_registry.TryCreateRoom(conn.connectionId, name, config == null ? maxConnections : config.EffectiveMaxPlayers, out var room, out var error))
+            if (!_registry.TryCreateRoom(conn.connectionId, name, config == null ? maxConnections : config.EffectiveMaxPlayers, out var room, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
 
@@ -314,9 +346,9 @@ namespace Socket.Multiplayer
             }
 
             var allowLateJoiners = config != null && config.allowLateJoiners;
-            if (!_registry.TryJoinRoom(conn.connectionId, roomId, allowLateJoiners, out var room, out var error))
+            if (!_registry.TryJoinRoom(conn.connectionId, roomId, allowLateJoiners, out var room, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
 
@@ -331,16 +363,16 @@ namespace Socket.Multiplayer
         [Server]
         private void LeaveRoom(NetworkConnectionToClient conn)
         {
-            if (!_registry.TryLeaveRoom(conn.connectionId, out var roomId, out var roomRemoved, out var error))
+            if (!_registry.TryLeaveRoom(conn.connectionId, out var roomId, out var roomRemoved, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
 
             if (roomRemoved) DestroyRoomObjects(roomId);
             else
             {
-                RemovePlayerFromGomokuMatch(roomId, conn);
+                HandleGomokuParticipantLeft(roomId, conn);
                 SyncPlayers(roomId);
                 RefreshRoom(roomId);
             }
@@ -357,12 +389,12 @@ namespace Socket.Multiplayer
             var gomokuRules = template == null ? null : template.gomokuRules;
             if (gomokuRules != null && !gomokuRules.allowSpectators)
             {
-                SendError(conn, "This room does not allow spectators.");
+                SendError(conn, "This room does not allow spectators.", MultiplayerErrorCode.SpectatorNotAllowed);
                 return;
             }
-            if (!_registry.TryJoinRoomAsSpectator(conn.connectionId, roomId, maxSpectators, out var room, out var error))
+            if (!_registry.TryJoinRoomAsSpectator(conn.connectionId, roomId, maxSpectators, out var room, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
 
@@ -376,9 +408,9 @@ namespace Socket.Multiplayer
         [Server]
         private void CancelRoom(NetworkConnectionToClient conn)
         {
-            if (!_registry.TryCancelRoom(conn.connectionId, out var roomId, out var affectedPlayers, out var error))
+            if (!_registry.TryCancelRoom(conn.connectionId, out var roomId, out var affectedPlayers, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
 
@@ -396,9 +428,9 @@ namespace Socket.Multiplayer
         [Server]
         private void SetReady(NetworkConnectionToClient conn, bool value)
         {
-            if (!_registry.TrySetReady(conn.connectionId, value, out var room, out var error))
+            if (!_registry.TrySetReady(conn.connectionId, value, out var room, out var error, out var errorCode))
             {
-                SendError(conn, error);
+                SendError(conn, error, errorCode);
                 return;
             }
             SyncPlayers(room);
@@ -519,6 +551,35 @@ namespace Socket.Multiplayer
         {
             if (_registry != null && _registry.TryGetRoom(roomId, out var room))
                 RemovePlayerFromGomokuMatch(room, conn);
+        }
+
+        /// <summary>
+        /// A member left a room (leave or disconnect): mark the match participant gone.
+        /// Active matches forfeit instead of deadlocking on the leaver's turn.
+        /// </summary>
+        [Server]
+        private void HandleGomokuParticipantLeft(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        {
+            if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            match.ServerHandleParticipantLeft(player.StableId);
+        }
+
+        [Server]
+        private void HandleGomokuParticipantLeft(Guid roomId, NetworkConnectionToClient conn)
+        {
+            if (_registry != null && _registry.TryGetRoom(roomId, out var room))
+                HandleGomokuParticipantLeft(room, conn);
+        }
+
+        /// <summary>
+        /// Server-side admission for command-style messages (chat, interaction, game
+        /// commands). Rate limits are server behavior only and stay out of the config
+        /// signature; they live here so every entry point shares one policy (M3-S.5).
+        /// </summary>
+        public bool ServerTryConsumeRate(int connectionId, RateLimitKind kind)
+        {
+            return _rateLimiter == null || _rateLimiter.TryAcquire(connectionId, kind, NetworkTime.localTime);
         }
 
         private int GetRequiredMatchPlayers()
@@ -737,7 +798,7 @@ namespace Socket.Multiplayer
         }
 
         [Server]
-        private void SendError(NetworkConnectionToClient conn, string error)
+        private void SendError(NetworkConnectionToClient conn, string error, MultiplayerErrorCode errorCode = MultiplayerErrorCode.None)
         {
             if (conn == null) return;
 
@@ -761,10 +822,11 @@ namespace Socket.Multiplayer
                 roomId = roomId,
                 phase = phase,
                 error = error,
+                errorCode = errorCode,
                 roomInfos = BuildRoomInfos(),
                 playerInfos = playerInfos
             });
-            Debug.LogWarning($"Room operation rejected: {error}", this);
+            Debug.LogWarning($"Room operation rejected: {error} ({errorCode})", this);
         }
 
         private RoomInfo[] BuildRoomInfos()
@@ -825,6 +887,7 @@ namespace Socket.Multiplayer
             _localRoomId = message.roomId == Guid.Empty ? LobbyRoom.Id : message.roomId;
             _localPhase = message.phase;
             _lastError = message.error ?? string.Empty;
+            _lastErrorCode = message.errorCode;
             _localRoomName = _availableRooms
                 .Where(room => room.roomId == _localRoomId)
                 .Select(room => room.roomName)
@@ -841,6 +904,7 @@ namespace Socket.Multiplayer
             _localPhase = RoomPhase.Lobby;
             _localRoomName = string.Empty;
             _lastError = string.Empty;
+            _lastErrorCode = MultiplayerErrorCode.None;
             _pendingRoomId = Guid.Empty;
             RoomStateChanged?.Invoke();
         }
