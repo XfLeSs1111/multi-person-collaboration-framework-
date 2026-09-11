@@ -27,3 +27,7 @@ sysinfo.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# Unity-generated markers / test outputs
+MirrorExamplesPipelineConverted.txt
+TestResults/

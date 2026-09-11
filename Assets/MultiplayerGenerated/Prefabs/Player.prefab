@@ -93,6 +93,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6855493871894709211}
   - component: {fileID: 4969423650370365427}
+  - component: {fileID: 900000000000000001}
   - component: {fileID: 6447631545056804437}
   - component: {fileID: 6787195875393584442}
   - component: {fileID: 5230434524013950765}
@@ -158,6 +159,19 @@ MonoBehaviour:
     serializedVersion: 2
     rgba: 4294967295
   characterController: {fileID: 690914358981283735}
+--- !u!114 &900000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6051348722146983841}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d17e718851449a6879986e45c458fb7, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  MatchID:
 --- !u!114 &6787195875393584442
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -184,7 +198,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   syncMethod: 0
-  syncDirection: 1
+  syncDirection: 0
   syncMode: 0
   syncInterval: 0.05
   target: {fileID: 6855493871894709211}

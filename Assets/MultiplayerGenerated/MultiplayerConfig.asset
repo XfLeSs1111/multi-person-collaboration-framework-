@@ -12,19 +12,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d0432be5a534ba40bf9690472df7fc5, type: 3}
   m_Name: MultiplayerConfig
   m_EditorClassIdentifier: 
-  maxPlayers: 8
-  minPlayers: 1
-  port: 7777
-  sendRate: 30
-  defaultStartMode: 0
-  defaultAddress: localhost
-  defaultPlayerName: Player
+  defaultRoomTemplate: {fileID: 11400000, guid: 4ab824bce1d482941a85c3a4a91487aa, type: 2}
   roomName: Socket PC Room
-  offlineScene: Assets/MultiplayerGenerated/Scenes/Bootstrap.unity
-  lobbyScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
-  gameplayScene: Assets/MultiplayerGenerated/Scenes/Game.unity
+  minPlayers: 1
+  maxPlayers: 8
+  maxRooms: 16
+  maxServerPlayers: 64
+  maxSpectators: 20
   autoStartWhenAllReady: 0
   allowLateJoiners: 0
+  defaultAddress: localhost
+  port: 7777
+  defaultStartMode: 2
+  sendRate: 30
+  defaultPlayerName: Player
+  serverTtl: 3
+  offlineScene: Assets/MultiplayerGenerated/Scenes/Bootstrap.unity
+  lobbyScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
   moveSpeed: 4
   inputSendRate: 20
   spawnSpacing: 2

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 13e9004080d943bd91cf672991307f2b, type: 3}
+  m_Name: DefaultRoomTemplate
+  m_EditorClassIdentifier: 
+  templateName: "\u9ED8\u8BA4\u623F\u95F4"
+  description: "\u6807\u51C6\u591A\u4EBA\u623F\u95F4"
+  minPlayers: 1
+  maxPlayers: 8
+  maxSpectators: 20
+  gomokuRules: {fileID: 11400000, guid: 9de3ee93b4de4bc9ad8cd3c6ae0a95f7, type: 2}
+  playerSpawns:
+  - name: "\u73A9\u5BB6 1"
+    position: {x: -3, y: 0, z: 0}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  - name: "\u73A9\u5BB6 2"
+    position: {x: -1, y: 0, z: 0}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  - name: "\u73A9\u5BB6 3"
+    position: {x: 1, y: 0, z: 0}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  - name: "\u73A9\u5BB6 4"
+    position: {x: 3, y: 0, z: 0}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  interactables:
+  - prefab: {fileID: 0}
+    position: {x: -2, y: 0.4, z: 2}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  - prefab: {fileID: 0}
+    position: {x: 0, y: 0.4, z: 2}
+    eulerAngles: {x: 0, y: 0, z: 0}
+  - prefab: {fileID: 0}
+    position: {x: 2, y: 0.4, z: 2}
+    eulerAngles: {x: 0, y: 0, z: 0}
