@@ -87,7 +87,9 @@ namespace Socket.Multiplayer
             var inRoom = connected && manager.LocalRoomId != LobbyRoom.Id;
             roomListPanel.gameObject.SetActive(connected && !inRoom);
             roomPanel.gameObject.SetActive(inRoom);
-            boardPanel.gameObject.SetActive(inRoom && manager.CurrentPhase == RoomPhase.InGame);
+            // Board stays visible for the whole room visit: empty layout in the lobby,
+            // live match once the game starts (M2-V visual pass).
+            boardPanel.gameObject.SetActive(inRoom);
         }
 
         private void RefreshSessionWidgets()

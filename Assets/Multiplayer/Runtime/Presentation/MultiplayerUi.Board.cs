@@ -51,7 +51,8 @@ namespace Socket.Multiplayer
             var match = FindMatch(manager.LocalRoomId);
             if (match == null)
             {
-                boardStatusText.text = "等待棋局创建…";
+                EnsureEmptyBoard();
+                boardStatusText.text = "棋局将在开始游戏后创建";
                 return;
             }
             if (match.BoardSize != builtBoardSize || boardCells.Count != match.BoardSize * match.BoardSize)
@@ -65,6 +66,27 @@ namespace Socket.Multiplayer
             boardStatusText.text = match.Result != GomokuResult.None
                 ? $"结果：{ResultText(match.Result)}（共 {match.Turn} 手）"
                 : $"{match.Turn} 手 · {(match.CurrentSeat == 0 ? "黑棋 X 回合" : "白棋 O 回合")} · {MatchPhaseText(match.Phase)}";
+        }
+
+        // Before the match object exists the panel still shows the board footprint so
+        // players can see the battlefield during the lobby phase (M2-V visual pass).
+        private void EnsureEmptyBoard()
+        {
+            if (builtBoardSize == 0)
+            {
+                var size = 15;
+                var template = manager.Config == null ? null : manager.Config.defaultRoomTemplate;
+                if (template != null && template.gomokuRules != null) size = template.gomokuRules.boardSize;
+                BuildBoardGrid(size);
+            }
+            if (boardSignature == "empty") return;
+            boardSignature = "empty";
+            for (var i = 0; i < boardCells.Count; i++)
+            {
+                boardCellLabels[i].text = string.Empty;
+                boardCellLabels[i].color = Color.clear;
+                boardCells[i].interactable = false;
+            }
         }
 
         // Host can hold objects from several rooms at once (interest management only

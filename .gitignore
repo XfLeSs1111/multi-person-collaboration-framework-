@@ -31,3 +31,7 @@ Thumbs.db
 # Unity-generated markers / test outputs
 MirrorExamplesPipelineConverted.txt
 TestResults/
+
+# MCP-for-Unity screenshot output (regenerable)
+Assets/Screenshots/
+Assets/Screenshots.meta
