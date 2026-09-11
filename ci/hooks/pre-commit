@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fast pre-commit gate: pure-logic tests only (seconds, no editor).
+# Unity EditMode/PlayMode suites run on push/CI via ci/run-tests.ps1 instead.
+root="$(git rev-parse --show-toplevel)"
+dotnet test "$root/ci/PureLogic.Tests/PureLogic.Tests.csproj" --nologo -v q || {
+  echo "pre-commit: pure-logic tests failed, commit blocked." >&2
+  exit 1
+}
