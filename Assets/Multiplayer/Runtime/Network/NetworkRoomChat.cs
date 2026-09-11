@@ -16,12 +16,20 @@ namespace Socket.Multiplayer
     public sealed class NetworkRoomChat : NetworkBehaviour
     {
         [SerializeField, Min(1)] private int maxMessages = 64;
+        [SyncVar] private string roomIdText;
         public readonly SyncList<RoomChatMessage> messages = new SyncList<RoomChatMessage>();
-        public Guid RoomId => GetComponent<NetworkMatch>().matchId;
+
+        // NetworkMatch.matchId is a server-only field (its setter throws when the
+        // server is not active), so a client can never match a chat object to its
+        // room through it. Mirror the id in a SyncVar like NetworkRoomState and
+        // NetworkGomokuMatch do; otherwise FindChat(localRoomId) returns null on
+        // every client and room chat looks one-way (host only sees their own lines).
+        public Guid RoomId => Guid.TryParse(roomIdText, out var value) ? value : Guid.Empty;
 
         [Server]
         public void ServerAssignRoom(Guid roomId)
         {
+            roomIdText = roomId.ToString();
             GetComponent<NetworkMatch>().matchId = roomId;
         }
 
