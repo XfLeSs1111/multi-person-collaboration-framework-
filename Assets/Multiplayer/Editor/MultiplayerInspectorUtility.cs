@@ -20,12 +20,19 @@ namespace Socket.Multiplayer.Editor
             {
                 var existing = root.styleSheets[i];
                 var sheetName = existing == null ? null : existing.name;
-                if (sheetName != null && (sheetName.StartsWith("MultiplayerUi") || sheetName.StartsWith("Accent")))
+                if (sheetName != null && (sheetName.StartsWith("MultiplayerUi") || sheetName.StartsWith("Accent") || sheetName.StartsWith("Surface")))
                     root.styleSheets.Remove(existing);
             }
 
             var theme = AssetDatabase.LoadAssetAtPath<StyleSheet>(StyleSheetPath);
             if (theme != null) root.styleSheets.Add(theme);
+            var surfacePath = MultiplayerThemeSettings.SurfaceStyleSheetPath;
+            if (!string.IsNullOrEmpty(surfacePath))
+            {
+                var surface = AssetDatabase.LoadAssetAtPath<StyleSheet>(surfacePath);
+                if (surface != null) root.styleSheets.Add(surface);
+            }
+
             var accent = AssetDatabase.LoadAssetAtPath<StyleSheet>(MultiplayerThemeSettings.AccentStyleSheetPath);
             if (accent != null) root.styleSheets.Add(accent);
             root.AddToClassList("mp-root");

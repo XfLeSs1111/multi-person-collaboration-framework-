@@ -10,9 +10,13 @@
     --mp-accent-hover: rgb(92, 160, 244);
     --mp-accent-soft: rgba(74, 143, 231, 0.16);
     --mp-radius: 6px;
+    /* 背景基调：默认跟随编辑器皮肤，可由 Theme/Surface*.uss 覆盖 */
+    --mp-bg: var(--unity-colors-default-background);
+    --mp-card-bg: var(--unity-colors-box-background);
+    --mp-card-border: var(--unity-colors-box-border);
     padding: 12px;
     flex-grow: 1;
-    background-color: var(--unity-colors-default-background);
+    background-color: var(--mp-bg);
 }
 
 /* ── 文字层级 ── */
@@ -108,11 +112,11 @@
 
 /* ── 分组卡片 ── */
 .mp-section {
-    background-color: var(--unity-colors-box-background);
+    background-color: var(--mp-card-bg);
     border-width: 1px;
-    border-color: var(--unity-colors-box-border);
+    border-color: var(--mp-card-border);
     border-radius: var(--mp-radius);
-    padding: 12px;
+    padding: 14px;
     margin-bottom: 10px;
 }
 
@@ -174,11 +178,11 @@
 /* ── 总览卡片 / 徽标 / 操作条 ── */
 .mp-card {
     flex-grow: 1;
-    background-color: var(--unity-colors-box-background);
+    background-color: var(--mp-card-bg);
     border-width: 1px;
-    border-color: var(--unity-colors-box-border);
+    border-color: var(--mp-card-border);
     border-radius: var(--mp-radius);
-    padding: 12px;
+    padding: 14px;
     margin-right: 8px;
     margin-bottom: 8px;
 }
@@ -233,9 +237,9 @@
 .mp-board {
     align-self: flex-start;
     padding: 8px;
-    background-color: var(--unity-colors-box-background);
+    background-color: var(--mp-card-bg);
     border-width: 1px;
-    border-color: var(--unity-colors-box-border);
+    border-color: var(--mp-card-border);
     border-radius: var(--mp-radius);
 }
 
