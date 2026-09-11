@@ -27,6 +27,10 @@ MonoBehaviour:
   sendRate: 30
   defaultPlayerName: Player
   serverTtl: 3
+  roomCommandPerSecond: 2
+  chatPerSecond: 2
+  interactPerSecond: 2
+  gameCommandPerSecond: 4
   offlineScene: Assets/MultiplayerGenerated/Scenes/Bootstrap.unity
   lobbyScene: Assets/MultiplayerGenerated/Scenes/Lobby.unity
   moveSpeed: 4
@@ -35,3 +39,4 @@ MonoBehaviour:
   interactionRange: 3
   interactionLeaseSeconds: 10
   interactablesToggleOffAfterUse: 0
+  useLegacyImGuiHud: 0
