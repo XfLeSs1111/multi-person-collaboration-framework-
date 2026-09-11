@@ -15,9 +15,17 @@ namespace Socket.Multiplayer
         private static readonly Color ButtonColor = new Color(0.22f, 0.29f, 0.42f, 1f);
         private static readonly Color ButtonHighlight = new Color(0.32f, 0.41f, 0.58f, 1f);
         private static readonly Color ErrorColor = new Color(1f, 0.52f, 0.46f);
-        private static readonly Color CellColor = new Color(0.93f, 0.89f, 0.80f);
-        private static readonly Color StoneBlack = new Color(0.12f, 0.12f, 0.14f);
-        private static readonly Color StoneWhite = new Color(0.16f, 0.38f, 0.86f);
+        private static readonly Color BoardSurfaceColor = new Color(0.88f, 0.76f, 0.55f);
+        private static readonly Color BoardLineColor = new Color(0.30f, 0.20f, 0.10f, 0.85f);
+        private static readonly Color BoardStarColor = new Color(0.30f, 0.20f, 0.10f, 0.95f);
+        // Hover/press on an open intersection previews the stone you are about to drop.
+        private static readonly Color GhostColor = new Color(1f, 0.72f, 0.20f, 0.30f);
+        private static readonly Color GhostPressedColor = new Color(1f, 0.72f, 0.20f, 0.55f);
+        private static readonly Color StoneBlack = new Color(0.11f, 0.11f, 0.13f);
+        private static readonly Color StoneWhite = new Color(0.96f, 0.96f, 0.98f);
+        private static readonly Color StoneBlackRim = new Color(0.36f, 0.37f, 0.42f);
+        private static readonly Color StoneWhiteRim = new Color(0.33f, 0.33f, 0.37f);
+        private static readonly Color LastMoveColor = new Color(1f, 0.72f, 0.20f);
 
         private Font font;
 
@@ -91,11 +99,15 @@ namespace Socket.Multiplayer
             readyButton = CreateButton(buttons, "准备", 0f, OnReadyClicked);
             readyButtonText = readyButton.GetComponentInChildren<Text>();
             startButton = CreateButton(buttons, "开始游戏", 0f, () => room.StartGame());
+            startButtonText = startButton.GetComponentInChildren<Text>();
+            surrenderButton = CreateButton(buttons, "认输", 0f, OnSurrenderClicked);
             returnButton = CreateButton(buttons, "返回大厅", 0f, () => room.ReturnToLobby());
             cancelLeaveButton = CreateButton(buttons, "离开房间", 0f, OnCancelLeaveClicked);
             cancelLeaveText = cancelLeaveButton.GetComponentInChildren<Text>();
             CreateLabel(box, "成员", 14, TextAnchor.MiddleLeft, MutedColor, 20f);
-            playerListContent = CreateScrollView(box, "PlayerList", 120f);
+            playerListContent = CreateScrollView(box, "PlayerList", 110f);
+            CreateLabel(box, "战绩（结束后可回看/回放）", 14, TextAnchor.MiddleLeft, MutedColor, 20f);
+            matchRecordContent = CreateScrollView(box, "MatchRecords", 84f);
             CreateLabel(box, "聊天", 14, TextAnchor.MiddleLeft, MutedColor, 20f);
             chatContent = CreateScrollView(box, "ChatList", 190f);
             var chatRow = CreateHBox(box, 30f, 6f);
@@ -109,7 +121,14 @@ namespace Socket.Multiplayer
             boardPanel = CreatePanel("BoardPanel", parent, new Vector2(868f, -16f), new Vector2(540f, 580f));
             var box = CreateVBox(boardPanel, 6f);
             boardStatusText = CreateLabel(box, "等待棋局创建…", 15, TextAnchor.MiddleLeft, TextColor, 24f);
-            boardGrid = CreateGrid(box);
+            // Replay controls: hidden until a stored record is opened for review.
+            replayRow = CreateHBox(box, 28f, 6f);
+            replayStepBackButton = CreateButton(replayRow, "◀ 上一手", 0f, () => StepReplay(-1));
+            replayStatusText = CreateLabel(replayRow, "回放", 14, TextAnchor.MiddleCenter, MutedColor, 0f);
+            replayStepForwardButton = CreateButton(replayRow, "下一手 ▶", 0f, () => StepReplay(1));
+            replayExitButton = CreateButton(replayRow, "退出回放", 0f, StopReplay);
+            replayRow.gameObject.SetActive(false);
+            boardGrid = CreateBoardSurface(box);
         }
 
         private void BuildStatusBar(Transform parent)

@@ -24,22 +24,31 @@ namespace Socket.Multiplayer
         private RectTransform sessionPanel, roomListPanel, roomPanel, boardPanel;
         private Text statusErrorText, statusMetricsText, sessionStateText, roomTitleText, phaseText, boardStatusText;
         private InputField nameInput, addressInput, createRoomInput, chatInput;
-        private Button hostButton, joinButton, stopButton, browseButton, readyButton, startButton, returnButton, cancelLeaveButton;
-        private Text browseButtonText, readyButtonText, cancelLeaveText;
-        private RectTransform lanListContent, roomListContent, playerListContent, chatContent, boardGrid;
+        private Button hostButton, joinButton, stopButton, browseButton, readyButton, startButton, returnButton, cancelLeaveButton, surrenderButton;
+        private Text browseButtonText, readyButtonText, cancelLeaveText, startButtonText;
+        private RectTransform lanListContent, roomListContent, playerListContent, chatContent, boardGrid, boardSurface;
+        private RectTransform matchRecordContent;
+        private Button replayStepBackButton, replayStepForwardButton, replayExitButton;
+        private Text replayStatusText;
+        private RectTransform replayRow;
 
         private readonly List<GameObject> lanRows = new List<GameObject>();
         private readonly List<GameObject> roomRows = new List<GameObject>();
         private readonly List<GameObject> playerRows = new List<GameObject>();
         private readonly List<GameObject> chatRows = new List<GameObject>();
+        private readonly List<GameObject> matchRecordRows = new List<GameObject>();
         private readonly List<Button> boardCells = new List<Button>();
-        private readonly List<Text> boardCellLabels = new List<Text>();
+        private readonly List<Image> boardCellStones = new List<Image>();
+        private readonly List<Outline> boardCellRims = new List<Outline>();
+        private Image lastMoveMarker;
+        private int lastMarkerCell = -1;
 
         private bool roomsDirty = true, playersDirty = true, lanDirty = true, browsingLan;
         private int builtBoardSize;
-        private int chatRowCount = -1;
+        private string chatSignature = string.Empty;
         private Guid boundChatRoom = Guid.Empty;
         private string boardSignature = string.Empty;
+        private string recordSignature = "?";
 
         private NetworkPlayer LocalPlayer => NetworkClient.localPlayer == null
             ? null
@@ -130,6 +139,7 @@ namespace Socket.Multiplayer
             if (lanDirty) { lanDirty = false; RebuildLanRows(); }
             if (playersDirty) { playersDirty = false; RebuildPlayerRows(); }
             RefreshChatRows();
+            RefreshMatchRecordRows();
         }
     }
 }

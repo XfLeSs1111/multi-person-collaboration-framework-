@@ -46,6 +46,11 @@ namespace Socket.Multiplayer
             }
         }
 
+        // Framework wording for how a match ended; the game supplies only its own result
+        // label (see NetworkMatchAdapter.DescribeResult).
+        private static string EndCauseText(NetworkMatchAdapter match) =>
+            MatchRecordLabels.DescribeEnd(match.EndReason, match.ForfeitCause, match.EndDetail);
+
         // The server keeps sending English debug text (RoomRegistry); the structured
         // MultiplayerErrorCode from M3-S.6 is what the user-facing UI switches on.
         private static string LocalizeError(string fallback, MultiplayerErrorCode code)
@@ -72,6 +77,9 @@ namespace Socket.Multiplayer
                 case MultiplayerErrorCode.ReadyOnlyInLobby: return "仅大厅阶段可准备";
                 case MultiplayerErrorCode.NotInRoom: return "当前不在房间中";
                 case MultiplayerErrorCode.StartFailed: return "对局启动失败";
+                case MultiplayerErrorCode.NotYourTurn: return "还没轮到你行动";
+                case MultiplayerErrorCode.InvalidMatchCommand: return "该操作不可用（点位被占或超出范围）";
+                case MultiplayerErrorCode.MatchNotRunning: return "对局未在进行中";
                 case MultiplayerErrorCode.RateLimited: return "操作过于频繁（已限流）";
                 case MultiplayerErrorCode.UnknownOperation: return "未知操作";
             }
