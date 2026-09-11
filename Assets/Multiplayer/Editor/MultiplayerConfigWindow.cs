@@ -54,26 +54,23 @@ namespace Socket.Multiplayer.Editor
             MultiplayerInspectorUtility.ApplySkin(rootVisualElement);
             rootVisualElement.Clear();
 
-            var body = new VisualElement();
-            body.style.flexDirection = FlexDirection.Row;
-            body.style.flexGrow = 1f;
-            rootVisualElement.Add(body);
+            rootVisualElement.Add(BuildHero());
 
-            var nav = new VisualElement();
-            nav.AddToClassList("mp-nav");
+            var bar = new VisualElement();
+            bar.AddToClassList("mp-pillbar");
             navButtons = new Button[TabNames.Length];
             for (var i = 0; i < TabNames.Length; i++)
             {
                 var index = i;
                 var item = new Button(() => SelectTab(index)) { text = TabNames[i] };
-                item.AddToClassList("mp-nav-item");
+                item.AddToClassList("mp-pill-tab");
                 navButtons[i] = item;
-                nav.Add(item);
+                bar.Add(item);
             }
-            body.Add(nav);
+            rootVisualElement.Add(bar);
 
             contentHost = new VisualElement { style = { flexGrow = 1 } };
-            body.Add(contentHost);
+            rootVisualElement.Add(contentHost);
 
             SelectTab(activeTab);
         }
@@ -95,7 +92,7 @@ namespace Socket.Multiplayer.Editor
             activeTab = Mathf.Clamp(index, 0, TabNames.Length - 1);
             if (navButtons != null)
                 for (var i = 0; i < navButtons.Length; i++)
-                    navButtons[i].EnableInClassList("mp-nav-item--active", i == activeTab);
+                    navButtons[i].EnableInClassList("mp-pill-tab--active", i == activeTab);
             if (contentHost == null) return;
 
             contentHost.Clear();

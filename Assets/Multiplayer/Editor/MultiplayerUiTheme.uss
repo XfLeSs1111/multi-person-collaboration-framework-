@@ -264,3 +264,195 @@
     align-self: center;
     font-size: 12px;
 }
+
+/* ============ 参考 MCP for Unity 窗口的层级组件 ============ */
+
+/* 标题区：图标 + 主标题 + 副标题 + 右侧胶囊 */
+.mp-hero {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.mp-hero__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background-color: var(--mp-accent-soft);
+    border-width: 1px;
+    border-color: var(--unity-colors-box-border);
+    margin-right: 12px;
+}
+
+.mp-hero__text {
+    flex-grow: 1;
+}
+
+.mp-hero__title {
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+}
+
+.mp-hero__subtitle {
+    font-size: 12px;
+    color: var(--unity-colors-label-text);
+    opacity: 0.6;
+    margin-top: 2px;
+}
+
+.mp-pill {
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    background-color: var(--mp-accent-soft);
+    color: var(--unity-colors-label-text);
+}
+
+/* 全宽状态横幅 */
+.mp-banner {
+    border-radius: var(--mp-radius);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background-color: rgba(46, 160, 67, 0.18);
+    color: var(--unity-colors-label-text);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.mp-banner--warn {
+    background-color: rgba(214, 158, 46, 0.20);
+}
+
+.mp-banner--error {
+    background-color: rgba(220, 80, 80, 0.20);
+}
+
+/* 状态圆点 */
+.mp-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    margin-right: 8px;
+    background-color: rgb(90, 200, 120);
+}
+
+.mp-dot--warn {
+    background-color: rgb(230, 180, 70);
+}
+
+.mp-dot--error {
+    background-color: rgb(230, 90, 90);
+}
+
+/* 卡片内的“标签 | 值”行 */
+.mp-group-label {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+
+.mp-item {
+    flex-direction: row;
+    align-items: center;
+    min-height: 26px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.mp-item__label {
+    width: 132px;
+    flex-shrink: 0;
+    color: var(--unity-colors-label-text);
+    opacity: 0.75;
+    font-size: 12px;
+}
+
+.mp-item__value {
+    flex-grow: 1;
+    color: var(--unity-colors-label-text);
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* 彩色按钮：主色 / 成功 / 危险 */
+.mp-btn {
+    border-width: 0;
+    border-radius: var(--mp-radius);
+    padding: 6px 14px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    color: rgb(245, 245, 245);
+    background-color: rgb(58, 72, 90);
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.mp-btn:hover {
+    background-color: rgb(70, 86, 107);
+}
+
+.mp-btn--primary {
+    background-color: var(--mp-accent);
+}
+
+.mp-btn--primary:hover {
+    background-color: var(--mp-accent-hover);
+}
+
+.mp-btn--success {
+    background-color: rgb(35, 150, 84);
+}
+
+.mp-btn--success:hover {
+    background-color: rgb(44, 172, 99);
+}
+
+.mp-btn--danger {
+    background-color: rgb(196, 62, 62);
+}
+
+.mp-btn--danger:hover {
+    background-color: rgb(214, 76, 76);
+}
+
+.mp-btn--wide {
+    -unity-text-align: middle-center;
+    flex-grow: 1;
+}
+
+/* 药丸页签 */
+.mp-pillbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.mp-pill-tab {
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 14px;
+    background-color: rgba(128, 128, 128, 0.10);
+    color: var(--unity-colors-label-text);
+    opacity: 0.75;
+    padding: 5px 14px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    transition-property: background-color, opacity, border-color;
+    transition-duration: 0.08s;
+}
+
+.mp-pill-tab:hover {
+    opacity: 1;
+    background-color: rgba(128, 128, 128, 0.18);
+}
+
+.mp-pill-tab--active {
+    opacity: 1;
+    -unity-font-style: bold;
+    background-color: var(--mp-accent-soft);
+    border-color: var(--mp-accent);
+}

@@ -52,6 +52,27 @@ namespace Socket.Multiplayer.Editor
             return head;
         }
 
+        /// <summary>状态行：圆点 + 标签 + 值（用于配置检查、连接状态等）。</summary>
+        internal static VisualElement ItemRow(string label, string value, string dotClass = null)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("mp-item");
+
+            var dot = new VisualElement();
+            dot.AddToClassList("mp-dot");
+            if (!string.IsNullOrEmpty(dotClass)) dot.AddToClassList(dotClass);
+            row.Add(dot);
+
+            var labelElement = new Label(label);
+            labelElement.AddToClassList("mp-item__label");
+            row.Add(labelElement);
+
+            var valueElement = new Label(value);
+            valueElement.AddToClassList("mp-item__value");
+            row.Add(valueElement);
+            return row;
+        }
+
         /// <summary>状态徽标（如“配置完整”“3 项待处理”）。</summary>
         internal static Label Badge(string text, bool warning = false)
         {

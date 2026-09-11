@@ -21,14 +21,12 @@ namespace Socket.Multiplayer.Editor
             }
 
             var issues = MultiplayerConfigEditor.GetValidationIssues(config);
-            var status = new VisualElement();
-            status.style.flexDirection = FlexDirection.Row;
-            status.style.alignItems = Align.Center;
-            status.style.marginBottom = 8f;
-            status.Add(MultiplayerInspectorUtility.Badge(
-                issues.Count == 0 ? "配置完整，可以启动" : $"{issues.Count} 项需要处理",
-                issues.Count > 0));
-            page.Add(status);
+            var banner = new Label(issues.Count == 0
+                ? "配置完整，可以启动多人联机"
+                : $"发现 {issues.Count} 项需要处理，切到「配置检查」页查看明细");
+            banner.AddToClassList("mp-banner");
+            if (issues.Count > 0) banner.AddToClassList("mp-banner--warn");
+            page.Add(banner);
 
             var cards = new VisualElement();
             cards.AddToClassList("mp-actions");
@@ -46,7 +44,7 @@ namespace Socket.Multiplayer.Editor
             actionSection.Add(MultiplayerInspectorUtility.SectionHeader("快捷操作"));
             var actions = new VisualElement();
             actions.AddToClassList("mp-actions");
-            actions.Add(ActionButton("保存全部", SaveAll, true));
+            actions.Add(ActionButton("保存全部", SaveAll, ButtonKind.Success, true));
             actions.Add(ActionButton("检查配置", ShowValidationDialog));
             actions.Add(ActionButton("房间模板", CreateOrSelectRoomTemplate));
             actions.Add(ActionButton("定位配置", () =>
@@ -58,6 +56,32 @@ namespace Socket.Multiplayer.Editor
             actionSection.Add(actions);
             page.Add(actionSection);
             return page;
+        }
+
+        /// <summary>标题区：图标 + 主标题 + 副标题 + 协议胶囊（参考 MCP for Unity 窗口）。</summary>
+        private VisualElement BuildHero()
+        {
+            var hero = new VisualElement();
+            hero.AddToClassList("mp-hero");
+
+            var icon = new VisualElement();
+            icon.AddToClassList("mp-hero__icon");
+            hero.Add(icon);
+
+            var text = new VisualElement();
+            text.AddToClassList("mp-hero__text");
+            var title = new Label("Socket 多人联机");
+            title.AddToClassList("mp-hero__title");
+            var subtitle = new Label("房间 / 玩法 / 网络策略的统一配置入口");
+            subtitle.AddToClassList("mp-hero__subtitle");
+            text.Add(title);
+            text.Add(subtitle);
+            hero.Add(text);
+
+            var pill = new Label($"协议 V{MultiplayerProtocol.Version}");
+            pill.AddToClassList("mp-pill");
+            hero.Add(pill);
+            return hero;
         }
 
         private static VisualElement Card(string title, string body)
@@ -73,11 +97,22 @@ namespace Socket.Multiplayer.Editor
             return card;
         }
 
-        private static Button ActionButton(string text, Action callback, bool primary = false)
+        private enum ButtonKind
+        {
+            Default,
+            Primary,
+            Success,
+            Danger
+        }
+
+        private static Button ActionButton(string text, Action callback, ButtonKind kind = ButtonKind.Default, bool wide = false)
         {
             var button = new Button(callback) { text = text };
-            button.AddToClassList("mp-action");
-            if (primary) button.AddToClassList("mp-action--primary");
+            button.AddToClassList("mp-btn");
+            if (kind == ButtonKind.Primary) button.AddToClassList("mp-btn--primary");
+            else if (kind == ButtonKind.Success) button.AddToClassList("mp-btn--success");
+            else if (kind == ButtonKind.Danger) button.AddToClassList("mp-btn--danger");
+            if (wide) button.AddToClassList("mp-btn--wide");
             return button;
         }
     }

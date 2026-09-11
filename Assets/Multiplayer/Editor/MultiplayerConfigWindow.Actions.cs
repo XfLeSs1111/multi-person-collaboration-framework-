@@ -46,15 +46,18 @@ namespace Socket.Multiplayer.Editor
             }
 
             var issues = MultiplayerConfigEditor.GetValidationIssues(config);
-            if (issues.Count == 0)
-            {
-                page.Add(MultiplayerInspectorUtility.Info("所有关键配置均有效，可以启动多人联机。"));
-                return page;
-            }
+            var panel = new VisualElement();
+            panel.AddToClassList("mp-section");
+            panel.Add(MultiplayerInspectorUtility.SectionHeader("检查结果"));
 
-            foreach (var issue in issues)
-                page.Add(MultiplayerInspectorUtility.Info(issue, HelpBoxMessageType.Warning));
-            page.Add(ActionButton("重新检查", () => SelectTab(activeTab)));
+            if (issues.Count == 0)
+                panel.Add(MultiplayerInspectorUtility.ItemRow("通过", "所有关键配置均有效，可以启动多人联机。"));
+            else
+                foreach (var issue in issues)
+                    panel.Add(MultiplayerInspectorUtility.ItemRow("待处理", issue, "mp-dot--warn"));
+
+            page.Add(panel);
+            page.Add(ActionButton("重新检查", () => SelectTab(activeTab), ButtonKind.Primary));
             return page;
         }
 
