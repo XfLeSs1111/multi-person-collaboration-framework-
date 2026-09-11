@@ -136,5 +136,41 @@ namespace Socket.Multiplayer.Tests
             Assert.AreEqual(GomokuResult.WhiteWin, state.Result);
             Assert.IsFalse(session.Submit("bob", new PlaceStoneCommand(0), 3d).Accepted);
         }
+
+        [Test]
+        public void ReconnectSeats_KeepRoomAliveAndRestoreMembership()
+        {
+            var registry = new RoomRegistry();
+            Assert.IsTrue(registry.TryAddPlayer(1, "Alice", out _));
+            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out var room, out _, out _));
+
+            // Drop inside the window: the seat keeps the now-empty room alive.
+            registry.RecordPendingSeat("Alice", room.Id, false, 500d);
+            Assert.IsTrue(registry.RemovePlayer(1, 150d, out var previous));
+            Assert.AreEqual(room.Id, previous);
+            Assert.IsTrue(registry.TryGetRoom(room.Id, out _));
+            registry.TouchRoom(room.Id, 100d);
+            var recycled = new System.Collections.Generic.List<RoomRegistry.Room>();
+            Assert.AreEqual(0, registry.CollectIdleRooms(400d, 120d, recycled));
+
+            // Rejoin under a fresh connection id before expiry: same room, leader seat.
+            Assert.IsTrue(registry.TryAddPlayer(9, "Alice", out _));
+            Assert.IsTrue(registry.TryConsumePendingSeat("Alice", 450d, out var seat));
+            Assert.IsTrue(registry.TryRejoinRoom(9, seat.RoomId, seat.IsSpectator, out var rejoined, out _));
+            Assert.IsTrue(registry.TryGetPlayer(9, out var alice));
+            Assert.AreEqual(room.Id, alice.RoomId);
+            Assert.IsTrue(alice.IsLeader);
+            Assert.AreEqual(1, rejoined.MemberCount);
+            Assert.IsFalse(registry.TryConsumePendingSeat("Alice", 450d, out _));
+
+            // Once the window lapses, the prune sweep releases the room for collection.
+            registry.RecordPendingSeat("Alice", room.Id, false, 600d);
+            registry.RemovePlayer(9, 590d, out _);
+            var expired = new System.Collections.Generic.List<Guid>();
+            Assert.AreEqual(0, registry.PrunePendingSeats(590d, expired));
+            Assert.AreEqual(1, registry.PrunePendingSeats(610d, expired));
+            Assert.IsTrue(registry.TryRemoveRoomIfEmpty(room.Id));
+            Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+        }
     }
 }

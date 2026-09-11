@@ -41,6 +41,7 @@ namespace Socket.Multiplayer
         private Guid _pendingRoomId;
         private ConnectionRateLimiter _rateLimiter;
         private readonly List<RoomRegistry.Room> _idleRooms = new List<RoomRegistry.Room>();
+        private readonly List<Guid> _expiredSeatRooms = new List<Guid>();
         private float _nextIdleSweep;
 
         public event Action RoomStateChanged;
@@ -189,14 +190,27 @@ namespace Socket.Multiplayer
 
         public override void OnServerDisconnect(NetworkConnectionToClient conn)
         {
-            if (conn != null && authenticator is SocketAuthenticator socketAuthenticator)
-                socketAuthenticator.ReleaseName(conn.authenticationData as string);
             // Mirror reuses connection ids; a fresh client must not inherit exhausted buckets.
             _rateLimiter?.Forget(conn.connectionId);
+            var stableId = conn == null ? null : conn.authenticationData as string;
+            var window = config == null ? 60f : config.reconnectWindow;
+            var now = NetworkTime.localTime;
+            var reserved = false;
             var previousRoomId = LobbyRoom.Id;
             if (_registry != null && conn != null)
             {
-                _registry.RemovePlayer(conn.connectionId, out previousRoomId);
+                // Remember the seat before removal: RemovePlayer keeps an empty room alive
+                // while an unexpired seat points at it (M3 P2.19).
+                if (window > 0f &&
+                    !string.IsNullOrWhiteSpace(stableId) &&
+                    _registry.TryGetPlayer(conn.connectionId, out var state) &&
+                    state.RoomId != LobbyRoom.Id)
+                {
+                    _registry.RecordPendingSeat(stableId, state.RoomId, state.IsSpectator, now + window);
+                    reserved = true;
+                }
+
+                _registry.RemovePlayer(conn.connectionId, now, out previousRoomId);
                 if (previousRoomId != LobbyRoom.Id)
                 {
                     if (_registry.TryGetRoom(previousRoomId, out var previousRoom))
@@ -207,6 +221,15 @@ namespace Socket.Multiplayer
                     else
                         DestroyRoomObjects(previousRoomId);
                 }
+            }
+
+            if (authenticator is SocketAuthenticator socketAuthenticator && !string.IsNullOrWhiteSpace(stableId))
+            {
+                // Reserve the name for the window so nobody can steal the seat's identity.
+                if (reserved)
+                    socketAuthenticator.ReserveName(stableId, now + window);
+                else
+                    socketAuthenticator.ReleaseName(stableId);
             }
 
             base.OnServerDisconnect(conn);
@@ -220,15 +243,37 @@ namespace Socket.Multiplayer
             if (player == null || player.connectionToClient == null) return;
             if (_registry == null)
                 _registry = new RoomRegistry(config == null ? 16 : config.maxRooms);
+            var connection = player.connectionToClient;
             if (!_registry.TryAddPlayer(
-                    player.connectionToClient.connectionId,
-                    player.connectionToClient.authenticationData as string,
+                    connection.connectionId,
+                    connection.authenticationData as string,
                     out var state))
                 return;
 
             var name = state.DisplayName;
             var color = Color.HSVToRGB((player.netId * 0.17f) % 1f, 0.7f, 0.95f);
             player.ServerSetIdentity(name, color);
+
+            // Reconnect (M3 P2.19): a live seat for this stable id sends the player
+            // straight back into the old room instead of the lobby.
+            if (_registry.TryConsumePendingSeat(name, NetworkTime.localTime, out var seat) &&
+                _registry.TryGetRoom(seat.RoomId, out _) &&
+                _registry.TryRejoinRoom(connection.connectionId, seat.RoomId, seat.IsSpectator, out var rejoinedRoom, out _))
+            {
+                _registry.TouchRoom(rejoinedRoom.Id, NetworkTime.localTime);
+                SyncPlayer(connection);
+                if (!seat.IsSpectator)
+                    PlacePlayerInRoom(connection, rejoinedRoom);
+                RefreshRoom(rejoinedRoom.Id);
+                if (_roomMatches.TryGetValue(rejoinedRoom.Id, out var match) && match != null && match.Phase == MatchPhase.Waiting)
+                {
+                    if (seat.IsSpectator) AddSpectatorToGomokuMatch(rejoinedRoom, connection);
+                    else AddPlayerToGomokuMatch(rejoinedRoom, connection);
+                }
+                BroadcastClientState(ClientRoomOperation.Joined, rejoinedRoom.Id);
+                return;
+            }
+
             player.ServerAssignRoom(LobbyRoom.Id, false, false);
             BroadcastClientState();
         }
@@ -597,6 +642,7 @@ namespace Socket.Multiplayer
             if (Time.unscaledTime < _nextIdleSweep) return;
             _nextIdleSweep = Time.unscaledTime + 1f;
             RecycleIdleRooms();
+            PruneReconnectState();
         }
 
         [Server]
@@ -619,6 +665,27 @@ namespace Socket.Multiplayer
                 Debug.Log($"Recycled idle room '{room.Name}' after {timeout:F0}s of inactivity.", this);
             }
             _idleRooms.Clear();
+        }
+
+        // Seat expiry (M3 P2.19): once a reconnect seat lapses the kept-warm room can be
+        // collected, and the name reservation is released so other players may use it.
+        [Server]
+        private void PruneReconnectState()
+        {
+            var now = NetworkTime.localTime;
+            if (_registry.PrunePendingSeats(now, _expiredSeatRooms) > 0)
+            {
+                foreach (var roomId in _expiredSeatRooms)
+                {
+                    if (!_registry.TryRemoveRoomIfEmpty(roomId)) continue;
+                    DestroyRoomObjects(roomId);
+                    BroadcastClientState(ClientRoomOperation.Cancelled, roomId);
+                    Debug.Log($"Reconnect window lapsed; collected empty room {roomId}.", this);
+                }
+                _expiredSeatRooms.Clear();
+            }
+            if (authenticator is SocketAuthenticator socketAuthenticator)
+                socketAuthenticator.CleanupNameReservations(now);
         }
 
         private int GetRequiredMatchPlayers()

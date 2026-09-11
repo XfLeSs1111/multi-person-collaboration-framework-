@@ -13,6 +13,7 @@ namespace Socket.Multiplayer
     public sealed class SocketAuthenticator : NetworkAuthenticator
     {
         private readonly HashSet<string> activeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, double> reservedNames = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
         public string playerName = "Player";
         public string LastError { get; private set; }
@@ -43,6 +44,7 @@ namespace Socket.Multiplayer
         {
             NetworkServer.UnregisterHandler<AuthRequestMessage>();
             activeNames.Clear();
+            reservedNames.Clear();
         }
 
         public override void OnServerAuthenticate(NetworkConnectionToClient conn) { }
@@ -66,12 +68,19 @@ namespace Socket.Multiplayer
             }
 
             var name = SanitizeName(message.authUsername);
+            CleanupNameReservations(NetworkTime.localTime);
             if (activeNames.Contains(name))
             {
                 Reject(conn, "玩家名称已被使用，请更换名称。", MultiplayerErrorCode.NameTaken);
                 return;
             }
+            if (reservedNames.TryGetValue(name, out var reservedUntil) && reservedUntil > NetworkTime.localTime)
+            {
+                Reject(conn, "该名称正在等待原玩家重连，请更换名称或稍后再试。", MultiplayerErrorCode.NameTaken);
+                return;
+            }
 
+            reservedNames.Remove(name);
             activeNames.Add(name);
             conn.authenticationData = name;
             conn.Send(new AuthResponseMessage { success = true, message = "认证成功" });
@@ -81,6 +90,29 @@ namespace Socket.Multiplayer
         public void ReleaseName(string name)
         {
             if (!string.IsNullOrWhiteSpace(name)) activeNames.Remove(name.Trim());
+        }
+
+        /// <summary>
+        /// Books a name while its owner is inside the reconnect window (M3 P2.19), so a
+        /// new client cannot steal the seat by taking the same display name.
+        /// </summary>
+        public void ReserveName(string name, double until)
+        {
+            if (!string.IsNullOrWhiteSpace(name)) reservedNames[name.Trim()] = until;
+        }
+
+        /// <summary>Releases name reservations whose reconnect window has lapsed.</summary>
+        public void CleanupNameReservations(double now)
+        {
+            List<string> stale = null;
+            foreach (var pair in reservedNames)
+            {
+                if (pair.Value > now) continue;
+                stale = stale ?? new List<string>();
+                stale.Add(pair.Key);
+            }
+            if (stale != null)
+                foreach (var key in stale) reservedNames.Remove(key);
         }
 
         public override void OnStartClient()

@@ -21,6 +21,15 @@ namespace Socket.Multiplayer
             public bool IsSpectator;
         }
 
+        /// <summary>A seat kept warm for a player who dropped inside the reconnect window (M3 P2.19).</summary>
+        public sealed class PendingSeat
+        {
+            public string StableId;
+            public Guid RoomId;
+            public bool IsSpectator;
+            public double ExpiresAt;
+        }
+
         public sealed class Room
         {
             public Guid Id;
@@ -39,6 +48,7 @@ namespace Socket.Multiplayer
 
         private readonly Dictionary<Guid, Room> _rooms = new Dictionary<Guid, Room>();
         private readonly Dictionary<int, Player> _players = new Dictionary<int, Player>();
+        private readonly Dictionary<string, PendingSeat> _pendingSeats = new Dictionary<string, PendingSeat>(StringComparer.Ordinal);
         private readonly int _maxRooms;
         private int _nextPlayerIndex;
 
@@ -69,7 +79,7 @@ namespace Socket.Multiplayer
             return true;
         }
 
-        public bool RemovePlayer(int connectionId, out Guid previousRoomId)
+        public bool RemovePlayer(int connectionId, double now, out Guid previousRoomId)
         {
             previousRoomId = LobbyRoom.Id;
             if (!_players.TryGetValue(connectionId, out var player)) return false;
@@ -80,7 +90,10 @@ namespace Socket.Multiplayer
                 room.PlayerIds.Remove(connectionId);
                 room.SpectatorIds.Remove(connectionId);
                 TransferLeader(room);
-                if (room.MemberCount == 0) _rooms.Remove(room.Id);
+                // Keep the room alive while a reconnect seat is waiting for its owner;
+                // the seat-expiry sweep in SocketRoomManager removes it afterwards.
+                if (room.MemberCount == 0 && !HasLivePendingSeat(room.Id, now))
+                    _rooms.Remove(room.Id);
             }
 
             _players.Remove(connectionId);
@@ -408,6 +421,99 @@ namespace Socket.Multiplayer
             if (_rooms.TryGetValue(roomId, out var room)) room.LastActivityTime = now;
         }
 
+        /// <summary>Remembers where a disconnected player should return (M3 P2.19).</summary>
+        public void RecordPendingSeat(string stableId, Guid roomId, bool isSpectator, double expiresAt)
+        {
+            if (string.IsNullOrWhiteSpace(stableId)) return;
+            _pendingSeats[stableId] = new PendingSeat
+            {
+                StableId = stableId,
+                RoomId = roomId,
+                IsSpectator = isSpectator,
+                ExpiresAt = expiresAt
+            };
+        }
+
+        /// <summary>Consumes a live seat for this stable id; expired entries are dropped.</summary>
+        public bool TryConsumePendingSeat(string stableId, double now, out PendingSeat seat)
+        {
+            seat = null;
+            if (string.IsNullOrWhiteSpace(stableId) || !_pendingSeats.TryGetValue(stableId, out var found)) return false;
+            _pendingSeats.Remove(stableId);
+            if (found.ExpiresAt <= now) return false;
+            seat = found;
+            return true;
+        }
+
+        /// <summary>Drops expired seats and reports which rooms may now be collected.</summary>
+        public int PrunePendingSeats(double now, List<Guid> expiredRoomIds)
+        {
+            expiredRoomIds.Clear();
+            List<string> stale = null;
+            foreach (var pair in _pendingSeats)
+            {
+                if (pair.Value.ExpiresAt > now) continue;
+                expiredRoomIds.Add(pair.Value.RoomId);
+                stale = stale ?? new List<string>();
+                stale.Add(pair.Key);
+            }
+            if (stale != null)
+                foreach (var key in stale) _pendingSeats.Remove(key);
+            return expiredRoomIds.Count;
+        }
+
+        /// <summary>True while an unexpired seat still points at the room.</summary>
+        public bool HasLivePendingSeat(Guid roomId, double now)
+        {
+            foreach (var seat in _pendingSeats.Values)
+                if (seat.RoomId == roomId && seat.ExpiresAt > now) return true;
+            return false;
+        }
+
+        /// <summary>Removes a room only when nobody is inside; used after seat expiry.</summary>
+        public bool TryRemoveRoomIfEmpty(Guid roomId)
+        {
+            if (_rooms.TryGetValue(roomId, out var room) && room.MemberCount == 0)
+            {
+                _rooms.Remove(room.Id);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Re-attaches a connection to a room inside the reconnect window, bypassing the
+        /// lobby check that normal joins require. The returning player rejoins as a regular
+        /// member; if the room lost its leader meanwhile, they take it back.
+        /// </summary>
+        public bool TryRejoinRoom(int connectionId, Guid roomId, bool isSpectator, out Room room, out MultiplayerErrorCode errorCode)
+        {
+            room = null;
+            errorCode = MultiplayerErrorCode.None;
+            if (!_players.TryGetValue(connectionId, out var player))
+            {
+                errorCode = MultiplayerErrorCode.NotRegistered;
+                return false;
+            }
+            if (!_rooms.TryGetValue(roomId, out room))
+            {
+                errorCode = MultiplayerErrorCode.RoomNotFound;
+                return false;
+            }
+
+            if (isSpectator)
+            {
+                room.SpectatorIds.Add(connectionId);
+                AssignPlayer(player, room, false, true);
+                return true;
+            }
+
+            room.PlayerIds.Add(connectionId);
+            var leader = !room.PlayerIds.Any(id => id != connectionId && _players.TryGetValue(id, out var other) && other.IsLeader);
+            AssignPlayer(player, room, leader, false);
+            return true;
+        }
+
         /// <summary>
         /// Removes rooms with no tracked activity for <paramref name="timeout"/> seconds and
         /// returns their members to the lobby. Rooms whose LastActivityTime was never set (0)
@@ -421,7 +527,7 @@ namespace Socket.Multiplayer
             if (timeout <= 0d) return 0;
 
             foreach (var room in _rooms.Values.ToArray())
-                if (room.LastActivityTime > 0d && now - room.LastActivityTime >= timeout)
+                if (room.LastActivityTime > 0d && now - room.LastActivityTime >= timeout && !HasLivePendingSeat(room.Id, now))
                     recycled.Add(room);
 
             foreach (var room in recycled)

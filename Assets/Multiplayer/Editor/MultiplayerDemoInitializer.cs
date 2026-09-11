@@ -85,6 +85,7 @@ namespace Socket.Multiplayer.Editor
             config.maxRooms = 16;
             config.maxServerPlayers = 64;
             config.maxSpectators = 20;
+            config.reconnectWindow = 60f;
             config.port = 7777;
             config.sendRate = 30;
             config.defaultStartMode = NetworkStartMode.Manual;

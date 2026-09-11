@@ -66,6 +66,11 @@ namespace Socket.Multiplayer
         public float roomIdleTimeout = 120f;
 
         [TabGroup("配置分区", "房间")]
+        [LabelText("断线重连窗口"), MinValue(0f), SuffixLabel("秒")]
+        [Tooltip("玩家掉线后保留其座位与显示名称的时长，期间用同名重连可回到原房间（0 表示关闭重连）。")]
+        public float reconnectWindow = 60f;
+
+        [TabGroup("配置分区", "房间")]
         [Sirenix.OdinInspector.ShowInInspector, Sirenix.OdinInspector.ReadOnly, LabelText("容量摘要")]
         private string CapacitySummary => $"{maxRooms} 个房间 / 单房 {EffectiveMaxPlayers} 人 / 整服 {ServerConnectionLimit} 人";
 
@@ -213,6 +218,7 @@ namespace Socket.Multiplayer
             serverTtl = Mathf.Max(0.5f, serverTtl);
             spawnSpacing = Mathf.Max(0.5f, spawnSpacing);
             roomIdleTimeout = Mathf.Max(0f, roomIdleTimeout);
+            reconnectWindow = Mathf.Max(0f, reconnectWindow);
             roomCommandPerSecond = Mathf.Max(0.5f, roomCommandPerSecond);
             chatPerSecond = Mathf.Max(0.5f, chatPerSecond);
             interactPerSecond = Mathf.Max(0.5f, interactPerSecond);

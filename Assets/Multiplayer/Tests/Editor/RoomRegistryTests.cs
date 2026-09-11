@@ -216,6 +216,62 @@ namespace Socket.Multiplayer.Tests
             Assert.AreEqual(0, registry.CollectIdleRooms(999999d, 120d, recycled));
             Assert.IsTrue(registry.TryGetRoom(fresh.Id, out _));
         }
+
+        [Test]
+        public void PendingSeatKeepsEmptyRoomAliveUntilExpiry()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+
+            // Disconnect inside the reconnect window: the seat is recorded before removal.
+            registry.RecordPendingSeat("Alice", room.Id, false, 500d);
+            Assert.IsTrue(registry.RemovePlayer(1, 150d, out var previous));
+            Assert.AreEqual(room.Id, previous);
+            Assert.IsTrue(registry.TryGetRoom(room.Id, out var kept));
+            Assert.AreEqual(0, kept.MemberCount);
+            Assert.IsTrue(registry.HasLivePendingSeat(room.Id, 150d));
+
+            // While the seat lives the sweep must skip the room entirely.
+            var recycled = new System.Collections.Generic.List<RoomRegistry.Room>();
+            registry.TouchRoom(room.Id, 100d);
+            Assert.AreEqual(0, registry.CollectIdleRooms(400d, 120d, recycled));
+
+            // After expiry the seat is pruned and the kept-warm room is collected.
+            var expired = new System.Collections.Generic.List<Guid>();
+            Assert.AreEqual(0, registry.PrunePendingSeats(400d, expired));
+            Assert.AreEqual(1, registry.PrunePendingSeats(510d, expired));
+            Assert.AreEqual(room.Id, expired[0]);
+            Assert.IsTrue(registry.TryRemoveRoomIfEmpty(expired[0]));
+            Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+        }
+
+        [Test]
+        public void RejoinWithinWindowRestoresMembershipAndLeadership()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+
+            registry.RecordPendingSeat("Alice", room.Id, false, 500d);
+            registry.RemovePlayer(1, 400d, out _);
+
+            // The owner returns under a fresh connection id before the seat expires.
+            Assert.IsTrue(registry.TryAddPlayer(9, "Alice", out _));
+            Assert.IsTrue(registry.TryConsumePendingSeat("Alice", 450d, out var seat));
+            Assert.AreEqual(room.Id, seat.RoomId);
+            Assert.IsFalse(seat.IsSpectator);
+            Assert.IsTrue(registry.TryRejoinRoom(9, seat.RoomId, seat.IsSpectator, out var rejoined, out _));
+            Assert.IsTrue(registry.TryGetPlayer(9, out var alice));
+            Assert.AreEqual(room.Id, alice.RoomId);
+            Assert.IsTrue(alice.IsLeader); // the empty room had no leader left behind
+            Assert.AreEqual(1, rejoined.MemberCount);
+
+            // A seat can only be consumed once, and expired seats are not consumable.
+            Assert.IsFalse(registry.TryConsumePendingSeat("Alice", 450d, out _));
+            registry.RecordPendingSeat("Alice", room.Id, false, 460d);
+            Assert.IsFalse(registry.TryConsumePendingSeat("Alice", 470d, out _));
+        }
     }
 }
 #endif
