@@ -23,7 +23,7 @@ MonoBehaviour:
   allowLateJoiners: 0
   defaultAddress: localhost
   port: 7777
-  defaultStartMode: 2
+  defaultStartMode: 0
   sendRate: 30
   defaultPlayerName: Player
   serverTtl: 3

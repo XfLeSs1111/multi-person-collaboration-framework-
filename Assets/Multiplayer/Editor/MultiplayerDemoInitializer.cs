@@ -215,6 +215,17 @@ namespace Socket.Multiplayer.Editor
         {
             var path = SceneRoot + "/Bootstrap.unity";
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            // The offline scene keeps its own camera and light: the IMGUI HUD is the only UI
+            // before a session starts (and after returning offline), so the game view must
+            // not sit in "no cameras rendering". Lobby gets the same pair via its default setup.
+            var bootstrapCamera = new GameObject("Main Camera");
+            bootstrapCamera.tag = "MainCamera";
+            bootstrapCamera.AddComponent<Camera>();
+            bootstrapCamera.AddComponent<AudioListener>();
+            var bootstrapLight = new GameObject("Directional Light");
+            var lightComponent = bootstrapLight.AddComponent<Light>();
+            lightComponent.type = LightType.Directional;
+            bootstrapLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             var managerObject = new GameObject("SocketRoomManager");
             var manager = managerObject.AddComponent<SocketRoomManager>();
             managerObject.AddComponent<kcp2k.KcpTransport>();

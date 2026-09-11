@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: DefaultRoomTemplate
   m_EditorClassIdentifier: 
   templateName: "\u9ED8\u8BA4\u623F\u95F4"
-  description: "\u6807\u51C6\u591A\u4EBA\u623F\u95F4"
+  description: "\u6807\u51C6 8 \u4EBA\u8054\u673A\u623F\u95F4"
   minPlayers: 1
   maxPlayers: 8
   maxSpectators: 20
@@ -32,12 +32,12 @@ MonoBehaviour:
     position: {x: 3, y: 0, z: 0}
     eulerAngles: {x: 0, y: 0, z: 0}
   interactables:
-  - prefab: {fileID: 0}
+  - prefab: {fileID: 239014606240976817, guid: 448929308eed0e14d8c68de666ecce0a, type: 3}
     position: {x: -2, y: 0.4, z: 2}
     eulerAngles: {x: 0, y: 0, z: 0}
-  - prefab: {fileID: 0}
+  - prefab: {fileID: 239014606240976817, guid: 448929308eed0e14d8c68de666ecce0a, type: 3}
     position: {x: 0, y: 0.4, z: 2}
     eulerAngles: {x: 0, y: 0, z: 0}
-  - prefab: {fileID: 0}
+  - prefab: {fileID: 239014606240976817, guid: 448929308eed0e14d8c68de666ecce0a, type: 3}
     position: {x: 2, y: 0.4, z: 2}
     eulerAngles: {x: 0, y: 0, z: 0}
