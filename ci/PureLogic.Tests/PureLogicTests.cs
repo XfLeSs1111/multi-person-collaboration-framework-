@@ -67,6 +67,21 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void InteractionLeaseRules_CoverAllBranches()
+        {
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(false, 0, 1, 1f, 3f).Accepted); // inactive
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(true, 0, 0, 1f, 3f).Accepted);  // invalid requester
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(true, 7, 1, 3.1f, 3f).Accepted); // held by other wins over range check
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(true, 0, 1, 3.1f, 3f).Accepted); // out of range
+            Assert.IsTrue(InteractionLeaseRules.TryAcquire(true, 0, 1, 3f, 3f).Accepted);   // boundary is in range
+            Assert.IsTrue(InteractionLeaseRules.TryAcquire(true, 7, 7, 1f, 3f).Accepted);   // holder re-entry
+
+            Assert.IsFalse(InteractionLeaseRules.CanRelease(0, 1));
+            Assert.IsFalse(InteractionLeaseRules.CanRelease(7, 1));
+            Assert.IsTrue(InteractionLeaseRules.CanRelease(7, 7));
+        }
+
+        [Test]
         public void Gomoku_TurnsAndWinCompleteTheMatch()
         {
             var ruleset = new GomokuRuleset(15, 5, true, true, true);
