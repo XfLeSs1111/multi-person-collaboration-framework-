@@ -24,9 +24,9 @@ This removes the old `NetworkRoomManager` assumptions: one global `roomSlots`, o
    - `Lobby.unity`: the single physical online scene.
    - `Player.prefab`: `NetworkIdentity`, `NetworkMatch`, `NetworkPlayer`, input and transform sync.
    - `NetworkRoomState`, `NetworkRoomChat` and `Interactable` prefabs with `NetworkMatch`.
-4. Select `Assets/MultiplayerGenerated/MultiplayerConfig.asset` for the standard inspector, or open `Socket > Multiplayer > Open Odin Config Editor`.
+4. Select `Assets/MultiplayerGenerated/MultiplayerConfig.asset` for the standard inspector, or open the config centre at `Socket > 多人联机 > 打开配置中心` (UI Toolkit; accent colour and background tone are selectable in the 外观 page).
 
-The generated config exposes room capacity, maximum room count, port, movement, interaction leases, late joining, discovery TTL and the two scene paths. Both scenes are validated against Build Settings.
+The generated config exposes room capacity, maximum room count, port, movement, interaction leases, late joining, discovery TTL, turn timeout, match record/replay limits and the two scene paths. Both scenes are validated against Build Settings.
 
 ## Quick Start
 
@@ -49,6 +49,6 @@ The generated config exposes room capacity, maximum room count, port, movement, 
 
 ## Scope
 
-Implemented: authoritative movement, room create/join/leave/cancel, leader transfer, ready gating, per-room phase, per-room chat/state, match-isolated interactables, LAN discovery and Odin configuration entry point.
+Implemented: authoritative movement, room create/join/leave/cancel, leader transfer, ready gating, per-room phase, per-room chat/state, match-isolated interactables, LAN discovery and a UI Toolkit configuration centre (no third-party UI packages).
 
 Not included: public matchmaking, NAT traversal, voice, persistence, host migration, and a room-specific visual environment prefab. The current single physical scene is the stable foundation for those later additions.
