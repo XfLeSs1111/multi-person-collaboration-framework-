@@ -78,9 +78,11 @@ namespace Socket.Multiplayer.Tests
             var store = new InMemoryMatchEventStore<GomokuEvent>();
             session.AttachEventSink(store);
 
-            Assert.IsTrue(session.Forfeit("alice", 2d));
+            Assert.IsTrue(session.Forfeit("alice", MatchForfeitCause.Surrender, 2d));
 
             Assert.AreEqual(MatchPhase.Completed, session.Phase);
+            Assert.AreEqual(MatchEndReason.Forfeit, session.EndReason);
+            Assert.AreEqual(MatchForfeitCause.Surrender, session.ForfeitCause);
             Assert.AreEqual(GomokuResult.WhiteWin, state.Result);
             Assert.IsFalse(session.Submit("bob", new PlaceStoneCommand(0), 3d).Accepted);
             Assert.AreEqual(1, store.Records.Count);
@@ -95,14 +97,43 @@ namespace Socket.Multiplayer.Tests
                 Guid.NewGuid(), new GomokuState(15), new GomokuRules(Ruleset));
             waitingSession.AddParticipant(new MatchParticipant("alice", "Alice", 0, MatchParticipantRole.Player));
             waitingSession.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
-            Assert.IsFalse(waitingSession.Forfeit("alice", 1d));
+            Assert.IsFalse(waitingSession.Forfeit("alice", MatchForfeitCause.Timeout, 1d));
 
             var state = new GomokuState(15);
             var session = CreateSession(state);
             Assert.IsTrue(session.AddParticipant(new MatchParticipant("viewer", "Viewer", -1, MatchParticipantRole.Spectator)));
-            Assert.IsFalse(session.Forfeit("viewer", 1d));
-            Assert.IsFalse(session.Forfeit("unknown", 1d));
+            Assert.IsFalse(session.Forfeit("viewer", MatchForfeitCause.Leave, 1d));
+            Assert.IsFalse(session.Forfeit("unknown", MatchForfeitCause.Leave, 1d));
             Assert.AreEqual(MatchPhase.Active, session.Phase);
+        }
+
+        [Test]
+        public void DiagonalWinAndFullBoardDraw()
+        {
+            var state = new GomokuState(15);
+            var session = CreateSession(state);
+
+            // Anti-diagonal (1,-1): 60=(4,0), 46=(3,1), 32=(2,2), 18=(1,3), 4=(0,4)
+            var moves = new[] { 60, 1, 46, 2, 32, 3, 18, 5, 4 };
+            for (var i = 0; i < moves.Length; i++)
+                Assert.IsTrue(session.Submit(i % 2 == 0 ? "alice" : "bob", new PlaceStoneCommand(moves[i]), i).Accepted);
+
+            Assert.AreEqual(GomokuResult.BlackWin, state.Result);
+            Assert.AreEqual(4, state.LastCellIndex);
+            Assert.AreEqual(MatchPhase.Completed, session.Phase);
+
+            // 3x3 with an unreachable win length: filling the board is a draw.
+            var tinyState = new GomokuState(3);
+            var tinySession = new MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent>(
+                Guid.NewGuid(), tinyState, new GomokuRules(new GomokuRuleset(3, 5, true, true, true)));
+            tinySession.AddParticipant(new MatchParticipant("alice", "Alice", 0, MatchParticipantRole.Player));
+            tinySession.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
+            Assert.IsTrue(tinySession.Start());
+            for (var i = 0; i < 9; i++)
+                Assert.IsTrue(tinySession.Submit(i % 2 == 0 ? "alice" : "bob", new PlaceStoneCommand(i), i).Accepted);
+
+            Assert.AreEqual(GomokuResult.Draw, tinyState.Result);
+            Assert.AreEqual(8, tinyState.LastCellIndex);
         }
 
         private static MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent> CreateSession(

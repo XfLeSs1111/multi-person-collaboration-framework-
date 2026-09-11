@@ -25,6 +25,7 @@
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/MultiplayerErrorCode.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/LobbyRoom.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/ConnectionRateLimiter.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/MatchRecords.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Network/RoomRegistry.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchPrimitives.cs" />
     <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchParticipant.cs" />

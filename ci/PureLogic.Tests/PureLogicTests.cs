@@ -131,10 +131,102 @@ namespace Socket.Multiplayer.Tests
             session.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
             Assert.IsTrue(session.Start());
 
-            Assert.IsTrue(session.Forfeit("alice", 2d));
+            Assert.IsTrue(session.Forfeit("alice", MatchForfeitCause.Disconnect, 2d));
             Assert.AreEqual(MatchPhase.Completed, session.Phase);
+            Assert.AreEqual(MatchEndReason.Forfeit, session.EndReason);
+            Assert.AreEqual(MatchForfeitCause.Disconnect, session.ForfeitCause);
             Assert.AreEqual(GomokuResult.WhiteWin, state.Result);
             Assert.IsFalse(session.Submit("bob", new PlaceStoneCommand(0), 3d).Accepted);
+        }
+
+        [Test]
+        public void MatchRecordBook_KeepsOnlyTheConfiguredTail()
+        {
+            var roomId = Guid.NewGuid();
+            var book = new MatchRecordBook(2);
+            Assert.IsTrue(book.Enabled);
+
+            for (var i = 0; i < 3; i++)
+                book.Record(roomId, new MatchRecordInfo { matchId = Guid.NewGuid(), resultLabel = "r" + i, replayPayload = "0:B" });
+
+            var records = book.Get(roomId);
+            Assert.AreEqual(2, records.Count);
+            Assert.AreEqual("r1", records[0].resultLabel);
+            Assert.IsTrue(records[0].HasReplay);
+
+            book.Forget(roomId);
+            Assert.AreEqual(0, book.Get(roomId).Count);
+
+            // 0 条 = 策略关闭：既不存也不报错。
+            var disabled = new MatchRecordBook(0);
+            Assert.IsFalse(disabled.Enabled);
+            disabled.Record(roomId, new MatchRecordInfo());
+            Assert.AreEqual(0, disabled.Get(roomId).Count);
+        }
+
+        [Test]
+        public void MatchRecordLabels_DescribeEveryEnding()
+        {
+            Assert.AreEqual("认输", MatchRecordLabels.DescribeEnd(MatchEndReason.Forfeit, MatchForfeitCause.Surrender, string.Empty));
+            Assert.AreEqual("对方掉线", MatchRecordLabels.DescribeEnd(MatchEndReason.Forfeit, MatchForfeitCause.Disconnect, string.Empty));
+            Assert.AreEqual("超时判负", MatchRecordLabels.DescribeEnd(MatchEndReason.Forfeit, MatchForfeitCause.Timeout, string.Empty));
+            Assert.AreEqual("和棋", MatchRecordLabels.DescribeEnd(MatchEndReason.RulesDecided, MatchForfeitCause.None, "和棋"));
+            Assert.AreEqual("已结束", MatchRecordLabels.DescribeEnd(MatchEndReason.RulesDecided, MatchForfeitCause.None, string.Empty));
+        }
+
+        [Test]
+        public void ResetToLobby_ClearsReadyAndUnsticksTheRoom()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _, out _));
+
+            Assert.IsTrue(registry.ResetToLobby(room.Id));
+
+            Assert.AreEqual(RoomPhase.Lobby, room.Phase);
+            registry.TryGetPlayer(1, out var first);
+            registry.TryGetPlayer(2, out var second);
+            Assert.IsFalse(first.Ready);
+            Assert.IsFalse(second.Ready);
+            Assert.IsFalse(registry.ResetToLobby(room.Id), "Already in the lobby.");
+        }
+
+        [Test]
+        public void Gomoku_DiagonalWinAndFullBoardDraw()
+        {
+            var ruleset = new GomokuRuleset(15, 5, true, true, true);
+            var state = new GomokuState(15);
+            var session = new MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent>(
+                Guid.NewGuid(), state, new GomokuRules(ruleset));
+            session.AddParticipant(new MatchParticipant("alice", "Alice", 0, MatchParticipantRole.Player));
+            session.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
+            Assert.IsTrue(session.Start());
+
+            // Anti-diagonal (1,-1): 60=(4,0), 46=(3,1), 32=(2,2), 18=(1,3), 4=(0,4)
+            var moves = new[] { 60, 1, 46, 2, 32, 3, 18, 5, 4 };
+            for (var i = 0; i < moves.Length; i++)
+                Assert.IsTrue(session.Submit(i % 2 == 0 ? "alice" : "bob", new PlaceStoneCommand(moves[i]), i).Accepted);
+
+            Assert.AreEqual(GomokuResult.BlackWin, state.Result);
+            Assert.AreEqual(4, state.LastCellIndex);
+
+            // 3x3 with an unreachable win length: filling the board is a draw.
+            var tinyState = new GomokuState(3);
+            var tinySession = new MatchSession<GomokuState, PlaceStoneCommand, GomokuEvent>(
+                Guid.NewGuid(), tinyState, new GomokuRules(new GomokuRuleset(3, 5, true, true, true)));
+            tinySession.AddParticipant(new MatchParticipant("alice", "Alice", 0, MatchParticipantRole.Player));
+            tinySession.AddParticipant(new MatchParticipant("bob", "Bob", 1, MatchParticipantRole.Player));
+            Assert.IsTrue(tinySession.Start());
+            for (var i = 0; i < 9; i++)
+                Assert.IsTrue(tinySession.Submit(i % 2 == 0 ? "alice" : "bob", new PlaceStoneCommand(i), i).Accepted);
+
+            Assert.AreEqual(GomokuResult.Draw, tinyState.Result);
+            Assert.AreEqual(8, tinyState.LastCellIndex);
         }
 
         [Test]
@@ -171,6 +263,41 @@ namespace Socket.Multiplayer.Tests
             Assert.AreEqual(1, registry.PrunePendingSeats(610d, expired));
             Assert.IsTrue(registry.TryRemoveRoomIfEmpty(room.Id));
             Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+        }
+
+        [Test]
+        public void RoomGuards_CoverJoinLimitsCancelAndRollback()
+        {
+            var registry = new RoomRegistry();
+            Assert.IsTrue(registry.TryAddPlayer(1, "Alice", out _));
+            Assert.IsTrue(registry.TryAddPlayer(2, "Bob", out _));
+            Assert.IsTrue(registry.TryAddPlayer(3, "Carol", out _));
+            Assert.IsFalse(registry.TryJoinRoom(99, Guid.NewGuid(), false, out _, out _, out var unknown));
+            Assert.AreEqual(MultiplayerErrorCode.NotRegistered, unknown);
+
+            Assert.IsTrue(registry.TryCreateRoom(1, "A", 2, out var room, out _, out _));
+            Assert.IsTrue(registry.TryJoinRoom(2, room.Id, false, out _, out _, out _));
+            Assert.IsFalse(registry.TryJoinRoom(3, room.Id, false, out _, out _, out var full));
+            Assert.AreEqual(MultiplayerErrorCode.RoomFull, full);
+            Assert.IsFalse(registry.TryJoinRoomAsSpectator(3, room.Id, 1, out _, out _, out var notStarted));
+            Assert.AreEqual(MultiplayerErrorCode.RoomNotStarted, notStarted);
+
+            Assert.IsTrue(registry.TrySetReady(1, true, out _, out _, out _));
+            Assert.IsTrue(registry.TrySetReady(2, true, out _, out _, out _));
+            Assert.IsTrue(registry.TryStartRoom(1, 1, out _, out _, out _));
+            Assert.IsFalse(registry.TryReturnToLobby(2, out _, out _, out var notLeader));
+            Assert.AreEqual(MultiplayerErrorCode.NotLeader, notLeader);
+            Assert.IsTrue(registry.TryReturnToLobby(1, out _, out _, out _));
+            Assert.IsFalse(registry.RollbackStart(room.Id)); // lobby again after return
+            Assert.IsTrue(registry.TrySetReady(1, true, out _, out _, out _));
+            Assert.IsTrue(registry.TrySetReady(2, true, out _, out _, out _));
+            Assert.IsTrue(registry.TryStartRoom(1, 1, out _, out _, out _));
+            Assert.IsTrue(registry.RollbackStart(room.Id));
+
+            Assert.IsFalse(registry.TryCancelRoom(3, out _, out _, out _, out var noRoom));
+            Assert.AreEqual(MultiplayerErrorCode.NotInRoom, noRoom);
+            Assert.IsTrue(registry.TryCancelRoom(1, out _, out var affected, out _, out _));
+            Assert.AreEqual(2, affected.Length);
         }
     }
 }

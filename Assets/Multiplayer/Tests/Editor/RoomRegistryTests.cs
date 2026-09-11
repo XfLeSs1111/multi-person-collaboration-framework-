@@ -44,6 +44,28 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void ResetToLobbyClearsReadyAndUnsticksRoom()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryCreateRoom(1, "Room A", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _, out _));
+
+            Assert.IsTrue(registry.ResetToLobby(room.Id));
+
+            Assert.AreEqual(RoomPhase.Lobby, room.Phase);
+            registry.TryGetPlayer(1, out var first);
+            registry.TryGetPlayer(2, out var second);
+            Assert.IsFalse(first.Ready);
+            Assert.IsFalse(second.Ready);
+            Assert.IsFalse(registry.ResetToLobby(room.Id), "Already in the lobby.");
+        }
+
+        [Test]
         public void LeavingLeaderTransfersLeadershipAndRemovesEmptyRoom()
         {
             var registry = new RoomRegistry();
@@ -171,6 +193,28 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void ProtocolSignatureCoversCapacityAndVersionIsStable()
+        {
+            var config = ScriptableObject.CreateInstance<MultiplayerConfig>();
+            var baseline = MultiplayerProtocol.GetConfigSignature(config);
+            config.maxRooms += 1;
+            Assert.AreNotEqual(baseline, MultiplayerProtocol.GetConfigSignature(config));
+            config.maxRooms -= 1;
+            Assert.AreEqual(baseline, MultiplayerProtocol.GetConfigSignature(config));
+            Assert.AreEqual(5, MultiplayerProtocol.Version);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+
+        [Test]
+        public void InputAdmissionRejectsClockRollback()
+        {
+            var admission = new InputAdmission(20f); // minimum interval 25ms
+            Assert.IsTrue(admission.TryAccept(1, 10d));
+            Assert.IsFalse(admission.TryAccept(2, 9.9d));  // clock went backwards
+            Assert.IsTrue(admission.TryAccept(3, 10.06d)); // forward again once interval passes
+        }
+
+        [Test]
         public void SpectatorsDoNotConsumePlayerSeats()
         {
             var registry = new RoomRegistry();
@@ -271,6 +315,128 @@ namespace Socket.Multiplayer.Tests
             Assert.IsFalse(registry.TryConsumePendingSeat("Alice", 450d, out _));
             registry.RecordPendingSeat("Alice", room.Id, false, 460d);
             Assert.IsFalse(registry.TryConsumePendingSeat("Alice", 470d, out _));
+        }
+
+        [Test]
+        public void JoinGuards_CoverFullStartedAndUnregistered()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryAddPlayer(3, "Carol", out _);
+
+            Assert.IsFalse(registry.TryJoinRoom(99, Guid.NewGuid(), false, out _, out _, out var unknown));
+            Assert.AreEqual(MultiplayerErrorCode.NotRegistered, unknown);
+
+            registry.TryCreateRoom(1, "Room", 2, out var room, out _, out _);
+            Assert.IsTrue(registry.TryJoinRoom(2, room.Id, false, out _, out _, out _));
+            Assert.IsFalse(registry.TryJoinRoom(3, room.Id, false, out _, out _, out var full));
+            Assert.AreEqual(MultiplayerErrorCode.RoomFull, full);
+
+            // After start, joins are gated by the allowLateJoiners flag.
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _, out _));
+            Assert.IsFalse(registry.TryJoinRoom(3, room.Id, false, out _, out _, out var started));
+            Assert.AreEqual(MultiplayerErrorCode.RoomStarted, started);
+
+            // A late joiner fits once a seat frees up.
+            Assert.IsTrue(registry.TryLeaveRoom(2, out _, out _, out _, out _));
+            Assert.IsTrue(registry.TryJoinRoom(3, room.Id, true, out _, out _, out _));
+        }
+
+        [Test]
+        public void SpectatorGuards_RequireStartedRoomAndRespectLimit()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryAddPlayer(3, "V1", out _);
+            registry.TryAddPlayer(4, "V2", out _);
+            registry.TryCreateRoom(1, "Room", 1, out var room, out _, out _);
+
+            Assert.IsFalse(registry.TryJoinRoomAsSpectator(3, room.Id, 1, out _, out _, out var notStarted));
+            Assert.AreEqual(MultiplayerErrorCode.RoomNotStarted, notStarted);
+
+            registry.TrySetReady(1, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 1, out _, out _, out _));
+            Assert.IsTrue(registry.TryJoinRoomAsSpectator(3, room.Id, 1, out room, out _, out _));
+            Assert.IsFalse(registry.TryJoinRoomAsSpectator(4, room.Id, 1, out _, out _, out var capped));
+            Assert.AreEqual(MultiplayerErrorCode.SpectatorLimitReached, capped);
+            Assert.IsFalse(registry.TryToggleReady(3, out _, out _, out var canReady));
+            Assert.AreEqual(MultiplayerErrorCode.SpectatorCannotReady, canReady);
+        }
+
+        [Test]
+        public void CancelRoomReturnsEveryoneToLobbyAndOnlyLeaderMayCancel()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryCreateRoom(1, "Room", 1, out var room, out _, out _);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TryStartRoom(1, 1, out _, out _, out _);
+            registry.TryJoinRoomAsSpectator(2, room.Id, 4, out _, out _, out _);
+
+            Assert.IsFalse(registry.TryCancelRoom(2, out _, out _, out _, out var notLeader));
+            Assert.AreEqual(MultiplayerErrorCode.NotLeader, notLeader);
+
+            Assert.IsTrue(registry.TryCancelRoom(1, out var cancelledId, out var affected, out _, out _));
+            Assert.AreEqual(room.Id, cancelledId);
+            CollectionAssert.AreEquivalent(new[] { 1, 2 }, affected);
+            Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+            Assert.IsTrue(registry.TryGetPlayer(1, out var alice));
+            Assert.IsTrue(registry.TryGetPlayer(2, out var bob));
+            Assert.AreEqual(LobbyRoom.Id, alice.RoomId);
+            Assert.AreEqual(LobbyRoom.Id, bob.RoomId);
+
+            Assert.IsFalse(registry.TryCancelRoom(1, out _, out _, out _, out var notInRoom));
+            Assert.AreEqual(MultiplayerErrorCode.NotInRoom, notInRoom);
+        }
+
+        [Test]
+        public void ReturnToLobbyResetsReadyAndRequiresLeader()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryAddPlayer(2, "Bob", out _);
+            registry.TryCreateRoom(1, "Room", 2, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TrySetReady(1, true, out _, out _, out _);
+            registry.TrySetReady(2, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 2, out _, out _, out _));
+
+            Assert.IsFalse(registry.TryReturnToLobby(2, out _, out _, out var notLeader));
+            Assert.AreEqual(MultiplayerErrorCode.NotLeader, notLeader);
+
+            Assert.IsTrue(registry.TryReturnToLobby(1, out var returned, out _, out _));
+            Assert.AreEqual(RoomPhase.Lobby, returned.Phase);
+            Assert.IsTrue(registry.TryGetPlayer(1, out var alice));
+            Assert.IsTrue(registry.TryGetPlayer(2, out var bob));
+            Assert.IsFalse(alice.Ready);
+            Assert.IsFalse(bob.Ready);
+
+            Assert.IsFalse(registry.TryReturnToLobby(1, out _, out _, out var alreadyLobby));
+            Assert.AreEqual(MultiplayerErrorCode.AlreadyInLobby, alreadyLobby);
+        }
+
+        [Test]
+        public void RollbackStartRevertsInGameRoomsOnly()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryCreateRoom(1, "Room", 1, out var room, out _, out _);
+
+            Assert.IsFalse(registry.RollbackStart(room.Id)); // still in lobby, nothing to revert
+            registry.TrySetReady(1, true, out _, out _, out _);
+            Assert.IsTrue(registry.TryStartRoom(1, 1, out _, out _, out _));
+            Assert.IsTrue(registry.RollbackStart(room.Id));
+
+            Assert.IsTrue(registry.TryGetRoom(room.Id, out var reverted));
+            Assert.AreEqual(RoomPhase.Lobby, reverted.Phase);
+            Assert.IsTrue(registry.TryGetPlayer(1, out var alice));
+            Assert.IsFalse(alice.Ready);
+            Assert.IsFalse(registry.RollbackStart(Guid.NewGuid())); // unknown room
         }
     }
 }
