@@ -4,6 +4,7 @@
 [Oo]bj/
 [Bb]uild/
 [Bb]uilds/
+[Bb]in/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 
@@ -11,6 +12,8 @@
 .vs/
 *.csproj
 *.sln
+# ...except the CI pure-logic test project, which is tracked on purpose
+!ci/**/*.csproj
 *.user
 *.userprefs
 *.pidb

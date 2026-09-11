@@ -105,22 +105,4 @@ namespace Socket.Multiplayer
             rules.TryApply(previewState, actor, new PlaceStoneCommand(index));
         }
     }
-
-    public readonly struct GomokuRuleset
-    {
-        public int BoardSize { get; }
-        public int WinLength { get; }
-        public bool AllowDraw { get; }
-        public bool AllowSpectators { get; }
-        public bool EnableReplay { get; }
-
-        public GomokuRuleset(int boardSize, int winLength, bool allowDraw, bool allowSpectators, bool enableReplay)
-        {
-            BoardSize = boardSize;
-            WinLength = winLength;
-            AllowDraw = allowDraw;
-            AllowSpectators = allowSpectators;
-            EnableReplay = enableReplay;
-        }
-    }
 }

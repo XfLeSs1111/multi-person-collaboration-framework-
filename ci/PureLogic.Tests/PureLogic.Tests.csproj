@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Socket.Multiplayer.PureLogic.Tests</AssemblyName>
+    <RootNamespace>Socket.Multiplayer.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <!-- Compiles the Unity-independent sources straight from the project tree:
+       no copies, no projections, so CI always tests what the game ships.
+       Only files with zero UnityEngine/Mirror dependencies belong here. -->
+  <ItemGroup>
+    <Compile Include="../../Assets/Multiplayer/Runtime/Gameplay/InteractionLeaseRules.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Gameplay/TokenBucket.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/RoomPhase.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/InputAdmission.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/MultiplayerErrorCode.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/LobbyRoom.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/ConnectionRateLimiter.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Network/RoomRegistry.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchPrimitives.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchParticipant.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchSession.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Match/MatchReplay.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Games/Gomoku/GomokuModels.cs" />
+    <Compile Include="../../Assets/Multiplayer/Runtime/Games/Gomoku/GomokuRules.cs" />
+  </ItemGroup>
+</Project>

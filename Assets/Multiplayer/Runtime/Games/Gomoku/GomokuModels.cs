@@ -87,4 +87,27 @@ namespace Socket.Multiplayer
             return clone;
         }
     }
+
+    /// <summary>
+    /// Immutable rule values shared by the editor rule asset and the server kernel.
+    /// Lives here (not in GomokuRuleConfig) so pure-logic CI can compile it without
+    /// UnityEngine / Odin dependencies.
+    /// </summary>
+    public readonly struct GomokuRuleset
+    {
+        public int BoardSize { get; }
+        public int WinLength { get; }
+        public bool AllowDraw { get; }
+        public bool AllowSpectators { get; }
+        public bool EnableReplay { get; }
+
+        public GomokuRuleset(int boardSize, int winLength, bool allowDraw, bool allowSpectators, bool enableReplay)
+        {
+            BoardSize = boardSize;
+            WinLength = winLength;
+            AllowDraw = allowDraw;
+            AllowSpectators = allowSpectators;
+            EnableReplay = enableReplay;
+        }
+    }
 }
