@@ -1,75 +1,52 @@
 using System;
-using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Socket.Multiplayer
 {
     [Serializable]
     public sealed class RoomPlayerSpawn
     {
-        [TableColumnWidth(110, Resizable = false)]
-        [LabelText("名称")]
+        [Tooltip("仅用于策划识别。")]
         public string name = "出生点";
 
-        [LabelText("位置")]
         public Vector3 position;
 
-        [LabelText("旋转")]
         public Vector3 eulerAngles;
     }
 
     [Serializable]
     public sealed class RoomInteractableSpawn
     {
-        [LabelText("交互物预制体"), AssetsOnly]
         public NetworkInteractable prefab;
 
-        [LabelText("位置")]
         public Vector3 position;
 
-        [LabelText("旋转")]
         public Vector3 eulerAngles;
     }
 
+    /// <summary>房间静态内容模板：人数、出生点、交互物布局与玩法规则资产。</summary>
     [CreateAssetMenu(menuName = "Socket/房间模板", fileName = "RoomTemplate")]
     public sealed class RoomTemplate : ScriptableObject
     {
-        [TabGroup("模板分区", "基础")]
-        [InfoBox("模板只保存静态策划数据；运行中的玩家、准备状态和房间阶段仍由服务器维护。")]
-        [LabelText("模板名称"), Required, Tooltip("用于策划识别模板，不会替代玩家创建的房间名称。")]
+        // ───────────────── 基础 ─────────────────
+        [Tooltip("用于策划识别模板，不会替代玩家创建的房间名称。")]
         public string templateName = "默认房间";
 
-        [TabGroup("模板分区", "基础")]
-        [LabelText("模板说明"), TextArea(2, 4)]
-        public string description = "标准多人房间";
+        [TextArea(2, 4)] public string description = "标准多人房间";
 
-        [TabGroup("模板分区", "基础")]
-        [HorizontalGroup("模板分区/基础/人数", LabelWidth = 72)]
-        [LabelText("最少人数"), MinValue(1), SuffixLabel("人")]
-        public int minPlayers = 1;
+        [Min(1)] public int minPlayers = 1;
 
-        [TabGroup("模板分区", "基础")]
-        [HorizontalGroup("模板分区/基础/人数", LabelWidth = 72)]
-        [LabelText("最多人数"), MinValue(1), SuffixLabel("人")]
-        public int maxPlayers = 8;
+        [Min(1)] public int maxPlayers = 8;
 
-        [TabGroup("模板分区", "基础")]
-        [LabelText("最大观战人数"), MinValue(0), SuffixLabel("人")]
-        public int maxSpectators = 20;
+        [Min(0)] public int maxSpectators = 20;
 
-        [TabGroup("模板分区", "基础")]
-        [LabelText("五子棋规则"), AssetsOnly]
-        [Tooltip("配置了该资源后，房间开始时会创建对应的五子棋对局。未配置时使用默认 15×15 五子棋规则。")]
-        public GomokuRuleConfig gomokuRules;
+        [FormerlySerializedAs("gomokuRules")]
+        [Tooltip("绑定玩法规则资产（如五子棋规则）；未绑定时由玩法适配器使用默认规则。")]
+        public MatchRulesConfig rules;
 
-        [TabGroup("模板分区", "基础")]
-        [ShowInInspector, ReadOnly, LabelText("规则摘要")]
-        private string RuleSummary => $"{EffectiveMinPlayers}-{EffectiveMaxPlayers} 人 / {PlayerSpawnCount} 个出生点 / {InteractableCount} 个交互物";
-
-        [TabGroup("模板分区", "出生点")]
-        [InfoBox("玩家按列表顺序出生；人数超过列表长度时，从第一个点按全局间距自动延伸。")]
-        [TableList(AlwaysExpanded = true, DrawScrollView = false)]
-        [LabelText("出生点列表")]
+        // ───────────────── 出生点 ─────────────────
+        [Tooltip("玩家按列表顺序出生；人数超过列表长度时，从第一个点按全局间距自动延伸。")]
         public RoomPlayerSpawn[] playerSpawns =
         {
             new RoomPlayerSpawn { name = "玩家 1", position = new Vector3(-3f, 0f, 0f) },
@@ -78,10 +55,8 @@ namespace Socket.Multiplayer
             new RoomPlayerSpawn { name = "玩家 4", position = new Vector3(3f, 0f, 0f) }
         };
 
-        [TabGroup("模板分区", "交互物")]
-        [InfoBox("房间开始时由服务器生成，并自动绑定该房间的 MatchInterestManagement 可见性。")]
-        [TableList(AlwaysExpanded = true, DrawScrollView = false)]
-        [LabelText("交互物列表")]
+        // ───────────────── 交互物 ─────────────────
+        [Tooltip("房间开始时由服务器生成，并自动绑定该房间的 MatchInterestManagement 可见性。")]
         public RoomInteractableSpawn[] interactables =
         {
             new RoomInteractableSpawn { position = new Vector3(-2f, 0.4f, 2f) },

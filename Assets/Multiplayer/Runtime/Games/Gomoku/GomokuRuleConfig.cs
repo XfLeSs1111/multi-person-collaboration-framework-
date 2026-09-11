@@ -1,75 +1,38 @@
-using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace Socket.Multiplayer
 {
+    /// <summary>
+    /// 五子棋规则资产：静态配置，运行时棋盘状态由服务器 MatchSession 持有。
+    /// 可点击棋盘预览已移到 UI Toolkit 检查器（GomokuRuleConfigEditor）。
+    /// </summary>
     [CreateAssetMenu(menuName = "Socket/对战/五子棋规则", fileName = "GomokuRuleConfig")]
-    public sealed class GomokuRuleConfig : ScriptableObject
+    public sealed class GomokuRuleConfig : MatchRulesConfig
     {
-        [System.NonSerialized] private GomokuState previewState;
-        [System.NonSerialized] private MatchParticipant previewBlack;
-        [System.NonSerialized] private MatchParticipant previewWhite;
+        [Tooltip("棋盘边长；5~25。")]
+        [Range(5, 25)] public int boardSize = 15;
 
-        [TabGroup("规则分区", "棋盘")]
-        [InfoBox("五子棋规则是静态配置，运行时棋盘状态由服务器 MatchSession 持有。")]
-        [LabelText("棋盘尺寸"), MinValue(5), MaxValue(25), SuffixLabel("×"), PropertyOrder(0)]
-        public int boardSize = 15;
+        [Tooltip("连成多少子获胜；3~10。")]
+        [Range(3, 10)] public int winLength = 5;
 
-        [TabGroup("规则分区", "棋盘")]
-        [LabelText("胜利连子数"), MinValue(3), MaxValue(10), SuffixLabel("子")]
-        public int winLength = 5;
-
-        [TabGroup("规则分区", "对局")]
-        [LabelText("允许和棋"), ToggleLeft]
+        [Tooltip("棋盘落满且无人获胜时是否判和棋。")]
         public bool allowDraw = true;
 
-        [TabGroup("规则分区", "观战")]
-        [LabelText("允许观战"), ToggleLeft]
+        [Tooltip("是否允许第三名及之后的玩家以观战身份留在对局中。")]
         public bool allowSpectators = true;
 
-        [TabGroup("规则分区", "回放")]
-        [LabelText("启用回放"), ToggleLeft]
+        [Tooltip("是否随战绩保留落子序列供客户端回放。")]
         public bool enableReplay = true;
 
-        [TabGroup("规则分区", "规则")]
-        [ShowInInspector, Sirenix.OdinInspector.ReadOnly, LabelText("规则摘要")]
-        private string Summary => $"{boardSize}×{boardSize} / {winLength} 子胜利 / {(allowDraw ? "允许和棋" : "不和棋")}";
+        public override string RulesetName => "五子棋";
 
-        [TabGroup("规则分区", "预览")]
-        [InfoBox("点击棋盘进行规则预览。这里使用和服务器相同的 GomokuRules，不会写入运行时对局。")]
-        [OnInspectorGUI]
-        private void DrawBoardPreview()
-        {
-            EnsurePreview();
-            var size = previewState.BoardSize;
-            var cellSize = 24f;
-            for (var row = 0; row < size; row++)
-            {
-                GUILayout.BeginHorizontal();
-                for (var column = 0; column < size; column++)
-                {
-                    var index = row * size + column;
-                    var label = previewState.GetCell(index) == GomokuCell.Black
-                        ? "X"
-                        : previewState.GetCell(index) == GomokuCell.White ? "O" : "+";
-                    if (GUILayout.Button(label, GUILayout.Width(cellSize), GUILayout.Height(cellSize)))
-                        TryPreviewMove(index);
-                }
-                GUILayout.EndHorizontal();
-            }
+        public override string RulesSummary =>
+            $"{boardSize}×{boardSize} / {winLength} 子胜利 / {(allowDraw ? "允许和棋" : "不和棋")}";
 
-            GUILayout.Label(previewState.Result == GomokuResult.None
-                ? $"预览回合：{(previewState.CurrentSeat == 0 ? "黑棋 X" : "白棋 O")} / 已落子 {previewState.Turn}"
-                : $"预览结果：{previewState.Result} / 已落子 {previewState.Turn}");
-        }
+        public override bool AllowsSpectators => allowSpectators;
 
-        [TabGroup("规则分区", "预览")]
-        [Button("重置棋盘预览")]
-        private void ResetPreview()
-        {
-            previewState = null;
-            EnsurePreview();
-        }
+        public override string SignatureFingerprint() =>
+            $"gomoku:{boardSize}:{winLength}:{allowSpectators}:{allowDraw}:{enableReplay}";
 
         public GomokuRuleset CreateRuleset()
         {
@@ -86,23 +49,6 @@ namespace Socket.Multiplayer
         {
             boardSize = Mathf.Clamp(boardSize, 5, 25);
             winLength = Mathf.Clamp(winLength, 3, Mathf.Min(10, boardSize));
-            previewState = null;
-        }
-
-        private void EnsurePreview()
-        {
-            var ruleset = CreateRuleset();
-            if (previewState != null && previewState.BoardSize == ruleset.BoardSize) return;
-            previewState = new GomokuState(ruleset.BoardSize);
-            previewBlack = new MatchParticipant("preview-black", "黑棋", 0, MatchParticipantRole.Player);
-            previewWhite = new MatchParticipant("preview-white", "白棋", 1, MatchParticipantRole.Player);
-        }
-
-        private void TryPreviewMove(int index)
-        {
-            var rules = new GomokuRules(CreateRuleset());
-            var actor = previewState.CurrentSeat == 0 ? previewBlack : previewWhite;
-            rules.TryApply(previewState, actor, new PlaceStoneCommand(index));
         }
     }
 }

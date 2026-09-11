@@ -1,0 +1,192 @@
+/* 联机配置中心 / 检查器共用皮肤（Unity 2022 UI Toolkit）
+   颜色全部用半透明灰叠加，明暗两套皮肤下都能自适应。 */
+
+.mp-root {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 10px;
+    padding-bottom: 12px;
+    flex-grow: 1;
+}
+
+.mp-page-title {
+    -unity-font-style: bold;
+    font-size: 17px;
+    margin-bottom: 8px;
+    margin-top: 2px;
+}
+
+.mp-title {
+    -unity-font-style: bold;
+    font-size: 13px;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.mp-tabbar {
+    flex-direction: row;
+    margin-bottom: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(128, 128, 128, 0.35);
+}
+
+.mp-tab {
+    border-width: 0px;
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    font-size: 12px;
+    color: rgb(170, 170, 170);
+}
+
+.mp-tab:hover {
+    color: rgb(235, 235, 235);
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.mp-tab--active {
+    color: rgb(240, 240, 240);
+    -unity-font-style: bold;
+    background-color: rgba(128, 128, 128, 0.10);
+    border-bottom-color: rgb(61, 130, 255);
+}
+
+.mp-pane {
+    padding-top: 4px;
+}
+
+.mp-info {
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.mp-row {
+    flex-direction: row;
+    margin-bottom: 2px;
+}
+
+.mp-unit {
+    width: 40px;
+    -unity-text-align: middle-left;
+    color: rgb(150, 150, 150);
+    font-size: 11px;
+    margin-right: 6px;
+}
+
+.mp-summary {
+    flex-direction: row;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    background-color: rgba(128, 128, 128, 0.10);
+    border-left-width: 3px;
+    border-left-color: rgb(61, 130, 255);
+}
+
+.mp-summary__caption {
+    width: 92px;
+    color: rgb(150, 150, 150);
+    font-size: 11px;
+}
+
+.mp-summary__value {
+    white-space: normal;
+    font-size: 12px;
+}
+
+.mp-card {
+    flex-grow: 1;
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 8px;
+    padding-bottom: 12px;
+    margin-right: 8px;
+    margin-top: 4px;
+    background-color: rgba(128, 128, 128, 0.12);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.mp-card__title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(150, 150, 150);
+    margin-bottom: 6px;
+}
+
+.mp-card__body {
+    font-size: 15px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.mp-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.mp-action {
+    margin-right: 6px;
+    margin-bottom: 6px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.mp-board {
+    align-self: flex-start;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    background-color: rgba(128, 128, 128, 0.10);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.mp-cell {
+    width: 22px;
+    height: 22px;
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding-left: 0px;
+    padding-right: 0px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    border-left-width: 0px;
+    border-right-width: 0px;
+    border-top-width: 0px;
+    border-bottom-width: 0px;
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
+    border-bottom-left-radius: 11px;
+    border-bottom-right-radius: 11px;
+    background-color: rgba(128, 128, 128, 0.14);
+}
+
+.mp-cell--black {
+    background-color: rgb(22, 22, 26);
+}
+
+.mp-cell--white {
+    background-color: rgb(235, 235, 235);
+}

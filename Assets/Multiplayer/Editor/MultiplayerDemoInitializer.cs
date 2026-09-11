@@ -198,7 +198,7 @@ namespace Socket.Multiplayer.Editor
             template.minPlayers = 1;
             template.maxPlayers = 8;
             template.maxSpectators = 20;
-            template.gomokuRules = gomokuRules;
+            template.rules = gomokuRules;
             if (template.interactables != null)
                 foreach (var spawn in template.interactables)
                     if (spawn != null && spawn.prefab == null)

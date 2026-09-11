@@ -8,7 +8,7 @@ namespace Socket.Multiplayer.Editor
         [MenuItem("Socket/Multiplayer Framework")]
         private static void Open()
         {
-            OdinMultiplayerConfigWindow.Open();
+            MultiplayerConfigWindow.Open();
         }
     }
 }
