@@ -71,6 +71,21 @@ namespace Socket.Multiplayer
         public float reconnectWindow = 60f;
 
         [TabGroup("配置分区", "房间")]
+        [LabelText("落子思考时限"), MinValue(0f), SuffixLabel("秒")]
+        [Tooltip("单回合思考时间上限：超时由服务器判定当前该落子的一方负（0 表示关闭计时）。")]
+        public float turnTimeoutSeconds = 60f;
+
+        [TabGroup("配置分区", "房间")]
+        [LabelText("保存战绩条数"), MinValue(0)]
+        [Tooltip("每个房间保留的历史对局记录条数，供结束后查看战绩（0 = 不记录）。")]
+        public int matchRecordLimit = 10;
+
+        [TabGroup("配置分区", "房间")]
+        [ToggleLeft, LabelText("保存回放数据")]
+        [Tooltip("随战绩保存该局的落子序列；客户端可在本地逐步重放（关闭则只留结果）。")]
+        public bool recordReplays = true;
+
+        [TabGroup("配置分区", "房间")]
         [Sirenix.OdinInspector.ShowInInspector, Sirenix.OdinInspector.ReadOnly, LabelText("容量摘要")]
         private string CapacitySummary => $"{maxRooms} 个房间 / 单房 {EffectiveMaxPlayers} 人 / 整服 {ServerConnectionLimit} 人";
 
@@ -219,6 +234,8 @@ namespace Socket.Multiplayer
             spawnSpacing = Mathf.Max(0.5f, spawnSpacing);
             roomIdleTimeout = Mathf.Max(0f, roomIdleTimeout);
             reconnectWindow = Mathf.Max(0f, reconnectWindow);
+            turnTimeoutSeconds = Mathf.Max(0f, turnTimeoutSeconds);
+            matchRecordLimit = Mathf.Clamp(matchRecordLimit, 0, 100);
             roomCommandPerSecond = Mathf.Max(0.5f, roomCommandPerSecond);
             chatPerSecond = Mathf.Max(0.5f, chatPerSecond);
             interactPerSecond = Mathf.Max(0.5f, interactPerSecond);

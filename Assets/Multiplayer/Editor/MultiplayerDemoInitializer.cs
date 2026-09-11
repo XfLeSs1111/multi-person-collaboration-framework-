@@ -102,6 +102,10 @@ namespace Socket.Multiplayer.Editor
             config.gameCommandPerSecond = 4f;
             config.useLegacyImGuiHud = false;
             config.roomIdleTimeout = 120f;
+            config.reconnectWindow = 60f;
+            config.turnTimeoutSeconds = 60f;
+            config.matchRecordLimit = 10;
+            config.recordReplays = true;
             EditorUtility.SetDirty(config);
             return config;
         }
@@ -256,7 +260,7 @@ namespace Socket.Multiplayer.Editor
             managerSerialized.FindProperty("roomStatePrefab").objectReferenceValue = state.GetComponent<NetworkRoomState>();
             managerSerialized.FindProperty("roomChatPrefab").objectReferenceValue = chat.GetComponent<NetworkRoomChat>();
             managerSerialized.FindProperty("interactablePrefab").objectReferenceValue = interactable.GetComponent<NetworkInteractable>();
-            managerSerialized.FindProperty("gomokuMatchPrefab").objectReferenceValue = gomokuMatch.GetComponent<NetworkGomokuMatch>();
+            managerSerialized.FindProperty("matchPrefab").objectReferenceValue = gomokuMatch.GetComponent<NetworkGomokuMatch>();
             managerSerialized.ApplyModifiedPropertiesWithoutUndo();
             manager.playerPrefab = player;
             manager.spawnPrefabs = new List<GameObject> { state.gameObject, chat.gameObject, interactable, gomokuMatch };
