@@ -47,6 +47,8 @@ namespace Socket.Multiplayer
         private MultiplayerErrorCode _lastErrorCode = MultiplayerErrorCode.None;
         private Guid _pendingRoomId;
         private ConnectionRateLimiter _rateLimiter;
+        /// <summary>限流拒绝回复的节流时间戳（每连接最多每秒回一次）。</summary>
+        private readonly Dictionary<int, double> rateLimitReplies = new Dictionary<int, double>();
         private readonly List<RoomRegistry.Room> _idleRooms = new List<RoomRegistry.Room>();
         private readonly List<Guid> _expiredSeatRooms = new List<Guid>();
         private float _nextIdleSweep;
@@ -199,6 +201,7 @@ namespace Socket.Multiplayer
         {
             // Mirror reuses connection ids; a fresh client must not inherit exhausted buckets.
             _rateLimiter?.Forget(conn.connectionId);
+            rateLimitReplies.Remove(conn.connectionId);
             var stableId = conn == null ? null : conn.authenticationData as string;
             var window = config == null ? 60f : config.reconnectWindow;
             var now = NetworkTime.localTime;
@@ -340,7 +343,7 @@ namespace Socket.Multiplayer
             if (_registry == null || conn == null) return;
             if (!ServerTryConsumeRate(conn.connectionId, RateLimitKind.RoomOperation))
             {
-                SendError(conn, "Too many room requests.", MultiplayerErrorCode.RateLimited);
+                SendRateLimited(conn);
                 return;
             }
             if (!_registry.TryGetPlayer(conn.connectionId, out var requesterState))
@@ -658,6 +661,20 @@ namespace Socket.Multiplayer
         }
 
         /// <summary>
+        /// 限流拒绝回复：每连接最多每秒回一次，其余静默丢弃——防止“十字节请求换整张房间表”的
+        /// 放大效应，也避免每次超限都打一条带堆栈的 Warning。
+        /// </summary>
+        [Server]
+        private void SendRateLimited(NetworkConnectionToClient conn)
+        {
+            if (conn == null) return;
+            var now = NetworkTime.localTime;
+            if (rateLimitReplies.TryGetValue(conn.connectionId, out var last) && now - last < 1d) return;
+            rateLimitReplies[conn.connectionId] = now;
+            SendError(conn, "Too many requests.", MultiplayerErrorCode.RateLimited);
+        }
+
+        /// <summary>
         /// Server-side admission for command-style messages (chat, interaction, game
         /// commands). Rate limits are server behavior only and stay out of the config
         /// signature; they live here so every entry point shares one policy (M3-S.5).
@@ -789,6 +806,8 @@ namespace Socket.Multiplayer
                 // The room going back to the lobby is the single "match just finished"
                 // edge, so the record is written exactly once per game.
                 RecordFinishedMatch(pair.Key, match);
+                // 收尾会话：否则房间回 Lobby 后仍带着上一局的参与者名册（与手动返回大厅路径一致）。
+                match.ServerResetMatch();
                 SyncPlayers(pair.Key);
                 RefreshRoom(pair.Key);
                 BroadcastClientState(ClientRoomOperation.ReturnedToLobby, pair.Key);
@@ -1108,16 +1127,17 @@ namespace Socket.Multiplayer
         private PlayerInfo[] BuildPlayerInfos(RoomRegistry.Room room)
         {
             if (room == null || _registry == null) return Array.Empty<PlayerInfo>();
+            // 一次字典查找代替 Players.First(...)：成员多时原实现是 O(n²)。
             return room.MemberIds
-                .Where(id => _registry.TryGetPlayer(id, out _))
-                .Select(id =>
+                .Select(id => _registry.TryGetPlayer(id, out var found) ? found : null)
+                .Where(found => found != null)
+                .Select(player =>
                 {
-                    var player = _registry.Players.First(item => item.ConnectionId == id);
                     return new PlayerInfo
                     {
                         playerIndex = player.PlayerIndex,
                         displayName = player.DisplayName,
-                        displayColor = GetPlayerColor(id),
+                        displayColor = GetPlayerColor(player.ConnectionId),
                         ready = player.Ready,
                         isLeader = player.IsLeader,
                         isSpectator = player.IsSpectator,
