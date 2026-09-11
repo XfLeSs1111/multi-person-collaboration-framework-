@@ -186,6 +186,12 @@ namespace Socket.Multiplayer
         [LabelText("使用后关闭"), Tooltip("可交互对象首次成功使用后立即禁用。")]
         public bool interactablesToggleOffAfterUse;
 
+        [TabGroup("配置分区", "界面")]
+        [InfoBox("新版可视化界面（uGUI）由 MultiplayerUi 运行时构建；旧版 IMGUI 面板仅作调试后备。")]
+        [ToggleLeft]
+        [LabelText("保留旧版 IMGUI 面板"), Tooltip("勾选后与新界面并存，仅用于调试排障。")]
+        public bool useLegacyImGuiHud;
+
         private void OnValidate()
         {
             maxPlayers = Mathf.Clamp(maxPlayers, 1, 128);

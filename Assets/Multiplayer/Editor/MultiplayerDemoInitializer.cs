@@ -99,6 +99,7 @@ namespace Socket.Multiplayer.Editor
             config.chatPerSecond = 2f;
             config.interactPerSecond = 2f;
             config.gameCommandPerSecond = 4f;
+            config.useLegacyImGuiHud = false;
             EditorUtility.SetDirty(config);
             return config;
         }
@@ -237,6 +238,9 @@ namespace Socket.Multiplayer.Editor
             managerObject.AddComponent<SocketAuthenticator>();
             managerObject.AddComponent<SessionOperations>();
             managerObject.AddComponent<PcRoomHud>();
+            // The visual uGUI front-end (M2-V): built at runtime by the component so the
+            // generator does not have to persist a widget hierarchy inside the scene.
+            managerObject.AddComponent<MultiplayerUi>();
             // RoomOperations must live on the persistent manager object: the HUD wakes
             // before Lobby objects exist, and the single online scene keeps room
             // operations owned by SocketRoomManager.

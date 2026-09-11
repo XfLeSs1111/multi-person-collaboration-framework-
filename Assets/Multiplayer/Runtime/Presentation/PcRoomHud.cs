@@ -31,6 +31,10 @@ namespace Socket.Multiplayer
         private void OnGUI()
         {
             var manager = NetworkManager.singleton as SocketRoomManager;
+            // MultiplayerUi is the primary interface now; this panel is an opt-in
+            // debug fallback toggled by MultiplayerConfig.useLegacyImGuiHud.
+            if (GetComponent<MultiplayerUi>() != null && manager != null && manager.Config != null && !manager.Config.useLegacyImGuiHud)
+                return;
             GUILayout.BeginArea(new Rect(16f, 16f, 460f, Screen.height - 32f), GUI.skin.window);
             GUILayout.Label("Socket PC Multiplayer");
             _playerName = GUILayout.TextField(_playerName, 24);
