@@ -67,10 +67,6 @@ namespace Socket.Multiplayer
         public SocketNetworkMetrics Metrics => metrics == null ? metrics = GetComponent<SocketNetworkMetrics>() : metrics;
         public RoomInfo[] GetDiscoveryRooms() => BuildRoomInfos();
 
-        // Kept for old scene/prefab data while the generated assets migrate to M2.
-        [Server]
-        public void ServerEnsureLeader(SocketRoomPlayer joiningPlayer) { }
-
         public override void Awake()
         {
             base.Awake();
@@ -123,8 +119,10 @@ namespace Socket.Multiplayer
         {
             networkAddress = room.address;
             if (room.port > 0) ApplyPort(room.port);
-            _pendingRoomId = room.roomId;
+            // Mirror 的 StartClient() 会同步回调 OnStartClient() → ClearClientRoomState()，
+            // 因此待加入房间必须在连接启动之后再写入，否则会被立即清空（发现列表加入静默失效）。
             StartClient();
+            _pendingRoomId = room.roomId;
         }
 
         [Client]

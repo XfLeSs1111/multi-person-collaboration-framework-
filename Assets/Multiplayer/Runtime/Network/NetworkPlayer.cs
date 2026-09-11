@@ -116,6 +116,8 @@ namespace Socket.Multiplayer
                 inputAdmission = new InputAdmission(config == null ? 20f : config.inputSendRate);
             }
             if (!inputAdmission.TryAccept(sequence, Time.unscaledTime)) return;
+            // NaN/Infinity 会被 sqrMagnitude 比较漏过，必须显式拒绝。
+            if (!float.IsFinite(input.x) || !float.IsFinite(input.y)) return;
             if (input.sqrMagnitude > 1f) input.Normalize();
             serverInput = input;
         }

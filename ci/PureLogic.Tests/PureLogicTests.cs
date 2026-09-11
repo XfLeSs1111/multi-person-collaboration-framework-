@@ -102,6 +102,34 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void InGameRooms_AreNotRecycledByIdleSweep()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "Alice", out _);
+            registry.TryCreateRoom(1, "A", 2, out var room, out _, out _);
+            registry.TouchRoom(room.Id, 100d);
+
+            // 进行中的对局不能被闲置扫描销毁（由对局流程自行收尾）。
+            room.Phase = RoomPhase.InGame;
+            var recycled = new System.Collections.Generic.List<RoomRegistry.Room>();
+            Assert.AreEqual(0, registry.CollectIdleRooms(100000d, 120d, recycled));
+            Assert.IsTrue(registry.TryGetRoom(room.Id, out _));
+
+            // 回到大厅后可正常回收。
+            room.Phase = RoomPhase.Lobby;
+            Assert.AreEqual(1, registry.CollectIdleRooms(100000d, 120d, recycled));
+            Assert.IsFalse(registry.TryGetRoom(room.Id, out _));
+        }
+
+        [Test]
+        public void InteractionLease_RejectsNonFiniteDistance()
+        {
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(true, 0, 1, float.NaN, 3f).Accepted);
+            Assert.IsFalse(InteractionLeaseRules.TryAcquire(true, 0, 1, float.PositiveInfinity, 3f).Accepted);
+            Assert.IsTrue(InteractionLeaseRules.TryAcquire(true, 0, 1, 2.5f, 3f).Accepted);
+        }
+
+        [Test]
         public void Gomoku_TurnsAndWinCompleteTheMatch()
         {
             var ruleset = new GomokuRuleset(15, 5, true, true, true);

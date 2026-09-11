@@ -522,11 +522,14 @@ namespace Socket.Multiplayer
         }
 
         /// <summary>
-        /// Removes rooms with no tracked activity for <paramref name="timeout"/> seconds and
-        /// returns their members to the lobby. Rooms whose LastActivityTime was never set (0)
-        /// are never recycled — creation paths must TouchRoom first, so a missing clock can
-        /// not destroy a fresh room. Member connections stay alive so the network adapter can
-        /// notify and teleport them; this method only mutates registry state.
+        /// Removes idle <b>lobby-phase</b> rooms with no tracked activity for
+        /// <paramref name="timeout"/> seconds and returns their members to the lobby.
+        /// In-progress matches are never recycled here: a live match is owned by the
+        /// adapter/start flow and must finish (or be cancelled) before the room can be
+        /// collected. Rooms whose LastActivityTime was never set (0) are never recycled —
+        /// creation paths must TouchRoom first, so a missing clock can not destroy a fresh
+        /// room. Member connections stay alive so the network adapter can notify and
+        /// teleport them; this method only mutates registry state.
         /// </summary>
         public int CollectIdleRooms(double now, double timeout, List<Room> recycled)
         {
@@ -534,8 +537,11 @@ namespace Socket.Multiplayer
             if (timeout <= 0d) return 0;
 
             foreach (var room in _rooms.Values.ToArray())
+            {
+                if (room.Phase != RoomPhase.Lobby) continue;
                 if (room.LastActivityTime > 0d && now - room.LastActivityTime >= timeout && !HasLivePendingSeat(room.Id, now))
                     recycled.Add(room);
+            }
 
             foreach (var room in recycled)
             {

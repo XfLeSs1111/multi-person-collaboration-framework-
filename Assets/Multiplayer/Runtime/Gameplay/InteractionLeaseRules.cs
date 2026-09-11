@@ -25,7 +25,8 @@ namespace Socket.Multiplayer
             if (requester == 0) return new InteractionLeaseResult(false, "invalid_requester");
             if (currentHolder != 0 && currentHolder != requester)
                 return new InteractionLeaseResult(false, "already_held");
-            if (distance > maxDistance) return new InteractionLeaseResult(false, "out_of_range");
+            // NaN/Infinity 也必须按超距拒绝：`distance > maxDistance` 对 NaN 恒为 false。
+            if (!(distance <= maxDistance)) return new InteractionLeaseResult(false, "out_of_range");
             return new InteractionLeaseResult(true, "accepted");
         }
 
