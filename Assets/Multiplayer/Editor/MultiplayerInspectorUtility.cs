@@ -10,13 +10,24 @@ namespace Socket.Multiplayer.Editor
     /// <summary>检查器与配置中心共用小工具：统一皮肤、表单行、摘要条、页签栏。</summary>
     internal static class MultiplayerInspectorUtility
     {
-        internal const string StyleSheetPath = "Assets/Multiplayer/Editor/MultiplayerUiToolkit.uss";
+        internal const string StyleSheetPath = "Assets/Multiplayer/Editor/MultiplayerUiTheme.uss";
 
-        /// <summary>给根元素挂上共用样式表与根类名（检查器与窗口通用）。</summary>
+        /// <summary>挂载/刷新主题（基础样式 + 当前强调色片段）；可重复调用实现实时换肤。</summary>
         internal static void ApplySkin(VisualElement root)
         {
-            var sheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(StyleSheetPath);
-            if (sheet != null && !root.styleSheets.Contains(sheet)) root.styleSheets.Add(sheet);
+            // 先摘掉本项目此前挂过的样式，避免换肤时重复叠加
+            for (var i = root.styleSheets.count - 1; i >= 0; i--)
+            {
+                var existing = root.styleSheets[i];
+                var sheetName = existing == null ? null : existing.name;
+                if (sheetName != null && (sheetName.StartsWith("MultiplayerUi") || sheetName.StartsWith("Accent")))
+                    root.styleSheets.Remove(existing);
+            }
+
+            var theme = AssetDatabase.LoadAssetAtPath<StyleSheet>(StyleSheetPath);
+            if (theme != null) root.styleSheets.Add(theme);
+            var accent = AssetDatabase.LoadAssetAtPath<StyleSheet>(MultiplayerThemeSettings.AccentStyleSheetPath);
+            if (accent != null) root.styleSheets.Add(accent);
             root.AddToClassList("mp-root");
         }
 
@@ -24,6 +35,29 @@ namespace Socket.Multiplayer.Editor
         {
             var label = new Label(text);
             label.AddToClassList("mp-page-title");
+            return label;
+        }
+
+        /// <summary>分区标题：品牌色标记条 + 标题（放在卡片内做分组）。</summary>
+        internal static VisualElement SectionHeader(string title)
+        {
+            var head = new VisualElement();
+            head.AddToClassList("mp-section__head");
+            var bar = new VisualElement();
+            bar.AddToClassList("mp-section__bar");
+            var label = new Label(title);
+            label.AddToClassList("mp-section__title");
+            head.Add(bar);
+            head.Add(label);
+            return head;
+        }
+
+        /// <summary>状态徽标（如“配置完整”“3 项待处理”）。</summary>
+        internal static Label Badge(string text, bool warning = false)
+        {
+            var label = new Label(text);
+            label.AddToClassList("mp-badge");
+            if (warning) label.AddToClassList("mp-badge--warn");
             return label;
         }
 
@@ -41,10 +75,30 @@ namespace Socket.Multiplayer.Editor
             return box;
         }
 
+        /// <summary>轻量说明文字（比 HelpBox 更安静，用于卡片内注解）。</summary>
+        internal static Label Hint(string text)
+        {
+            var label = new Label(text);
+            label.AddToClassList("mp-hint");
+            return label;
+        }
+
         internal static PropertyField Field(SerializedObject so, string path, string label = null)
         {
             var prop = so.FindProperty(path);
-            return label == null ? new PropertyField(prop) : new PropertyField(prop, label);
+            var field = label == null ? new PropertyField(prop) : new PropertyField(prop, label);
+            // Bind() 会把 label 重置为属性名，这里把中文标签存起来，绑定后再套回去。
+            if (!string.IsNullOrEmpty(label)) field.userData = label;
+            return field;
+        }
+
+        /// <summary>必须在 root.Bind(...) 之后调用：把中文标签套回被绑定重置的字段。</summary>
+        internal static void ApplyLabels(VisualElement root)
+        {
+            root.Query<PropertyField>().ForEach(field =>
+            {
+                if (field.userData is string label) field.label = label;
+            });
         }
 
         internal static VisualElement Row(params VisualElement[] cells)
@@ -135,6 +189,12 @@ namespace Socket.Multiplayer.Editor
                     buttons[i].EnableInClassList("mp-tab--active", i == active);
             }
         }
+    }
+
+    /// <summary>支持嵌入配置中心显示的检查器：嵌入时隐藏自身页签，改为分区堆叠。</summary>
+    internal interface IEmbeddedInspector
+    {
+        void SetEmbeddedLayout();
     }
 }
 #endif

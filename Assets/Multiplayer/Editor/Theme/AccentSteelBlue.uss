@@ -1,0 +1,6 @@
+/* 主题片段：钢蓝（默认强调色） */
+.mp-root {
+    --mp-accent: rgb(74, 143, 231);
+    --mp-accent-hover: rgb(92, 160, 244);
+    --mp-accent-soft: rgba(74, 143, 231, 0.16);
+}

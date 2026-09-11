@@ -43,7 +43,7 @@ namespace Socket.Multiplayer
         [Tooltip("玩家掉线后保留其座位与显示名称的时长，期间用同名重连可回到原房间（0 表示关闭重连）。")]
         [Min(0f)] public float reconnectWindow = 60f;
 
-        [Tooltip("单回合思考时间上限：超时由服务器判定当前该落子的一方负（0 表示关闭计时）。")]
+        [Tooltip("单回合思考时间上限：超时由服务器判定当前行动方负（0 表示关闭计时）。")]
         [Min(0f)] public float turnTimeoutSeconds = 60f;
 
         [Tooltip("每个房间保留的历史对局记录条数，供结束后查看战绩（0 = 不记录）。")]

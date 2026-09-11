@@ -1,0 +1,6 @@
+/* 主题片段：青绿 */
+.mp-root {
+    --mp-accent: rgb(61, 184, 166);
+    --mp-accent-hover: rgb(84, 205, 188);
+    --mp-accent-soft: rgba(61, 184, 166, 0.16);
+}

@@ -1,0 +1,6 @@
+/* 主题片段：琥珀 */
+.mp-root {
+    --mp-accent: rgb(230, 171, 64);
+    --mp-accent-hover: rgb(240, 188, 92);
+    --mp-accent-soft: rgba(230, 171, 64, 0.18);
+}

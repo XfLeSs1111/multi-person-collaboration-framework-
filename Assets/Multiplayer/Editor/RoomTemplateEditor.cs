@@ -7,9 +7,13 @@ namespace Socket.Multiplayer.Editor
 {
     /// <summary>RoomTemplate 的 UI Toolkit 检查器：基础 / 出生点 / 交互物 三分区。</summary>
     [CustomEditor(typeof(RoomTemplate))]
-    internal sealed class RoomTemplateEditor : UnityEditor.Editor
+    internal sealed class RoomTemplateEditor : UnityEditor.Editor, IEmbeddedInspector
     {
         private static readonly string[] TabNames = { "基础", "出生点", "交互物" };
+
+        private bool embedded;
+
+        public void SetEmbeddedLayout() => embedded = true;
 
         private VisualElement[] panes;
         private Label summaryLabel;
@@ -20,8 +24,11 @@ namespace Socket.Multiplayer.Editor
             var root = new VisualElement();
             MultiplayerInspectorUtility.ApplySkin(root);
 
-            var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
-            root.Add(tabs.Root);
+            if (!embedded)
+            {
+                var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
+                root.Add(tabs.Root);
+            }
 
             var contentHost = new VisualElement { style = { marginTop = 4 } };
             panes = new VisualElement[TabNames.Length];
@@ -29,6 +36,8 @@ namespace Socket.Multiplayer.Editor
             {
                 panes[i] = new VisualElement();
                 panes[i].AddToClassList("mp-pane");
+                panes[i].AddToClassList("mp-section");
+                if (embedded) panes[i].Add(MultiplayerInspectorUtility.SectionHeader(TabNames[i]));
                 contentHost.Add(panes[i]);
             }
             root.Add(contentHost);
@@ -53,6 +62,7 @@ namespace Socket.Multiplayer.Editor
             panes[2].Add(new PropertyField(so.FindProperty("interactables"), "交互物列表"));
 
             root.Bind(serializedObject);
+            MultiplayerInspectorUtility.ApplyLabels(root);
             root.TrackSerializedObjectValue(serializedObject, _ => RefreshSummary());
 
             SwitchTab(0);
@@ -63,7 +73,7 @@ namespace Socket.Multiplayer.Editor
         private void SwitchTab(int active)
         {
             for (var i = 0; i < panes.Length; i++)
-                panes[i].style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
+                panes[i].style.display = embedded || i == active ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void RefreshSummary()

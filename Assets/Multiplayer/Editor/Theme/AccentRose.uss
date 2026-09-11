@@ -1,0 +1,6 @@
+/* 主题片段：玫红 */
+.mp-root {
+    --mp-accent: rgb(230, 107, 148);
+    --mp-accent-hover: rgb(240, 130, 168);
+    --mp-accent-soft: rgba(230, 107, 148, 0.18);
+}

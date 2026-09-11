@@ -1,0 +1,266 @@
+/* 联机配置中心 / 检查器主题（Unity 2022 UI Toolkit）
+   设计原则：
+   1) 底色与原生控件（按钮/输入框/帮助框）一律使用 Unity 内置变量 var(--unity-colors-*)，
+      自动跟随编辑器明暗皮肤，和编辑器本体保持协调；
+   2) 品牌钢蓝只作为强调色：选中态、分区标记条、主按钮、摘要条；
+   3) 统一圆角 6px、统一 8/12px 间距节奏；交互元素带 0.08s 过渡。 */
+
+.mp-root {
+    --mp-accent: rgb(74, 143, 231);
+    --mp-accent-hover: rgb(92, 160, 244);
+    --mp-accent-soft: rgba(74, 143, 231, 0.16);
+    --mp-radius: 6px;
+    padding: 12px;
+    flex-grow: 1;
+    background-color: var(--unity-colors-default-background);
+}
+
+/* ── 文字层级 ── */
+.mp-page-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+    margin-bottom: 10px;
+}
+
+.mp-title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+    margin-top: 10px;
+    margin-bottom: 6px;
+    opacity: 0.85;
+}
+
+.mp-hint {
+    color: var(--unity-colors-label-text);
+    opacity: 0.6;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.mp-divider {
+    height: 1px;
+    background-color: var(--unity-colors-box-border);
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* ── 侧边导航（配置中心） ── */
+.mp-nav {
+    width: 150px;
+    flex-shrink: 0;
+    padding-right: 12px;
+}
+
+.mp-nav-item {
+    -unity-text-align: middle-left;
+    border-width: 0;
+    border-radius: var(--mp-radius);
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--unity-colors-label-text);
+    opacity: 0.75;
+    padding: 7px 10px;
+    margin-bottom: 3px;
+    transition-property: background-color, opacity;
+    transition-duration: 0.08s;
+}
+
+.mp-nav-item:hover {
+    background-color: var(--unity-colors-toolbar_button-background-hover);
+    opacity: 1;
+}
+
+.mp-nav-item--active {
+    background-color: var(--mp-accent-soft);
+    -unity-font-style: bold;
+    opacity: 1;
+}
+
+/* ── 顶部页签（检查器单独使用时） ── */
+.mp-tabbar {
+    flex-direction: row;
+    margin-bottom: 10px;
+}
+
+.mp-tab {
+    border-width: 0;
+    border-radius: var(--mp-radius);
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--unity-colors-label-text);
+    opacity: 0.75;
+    padding: 6px 12px;
+    margin-right: 3px;
+    transition-property: background-color, opacity;
+    transition-duration: 0.08s;
+}
+
+.mp-tab:hover {
+    background-color: var(--unity-colors-toolbar_button-background-hover);
+    opacity: 1;
+}
+
+.mp-tab--active {
+    background-color: var(--mp-accent-soft);
+    -unity-font-style: bold;
+    opacity: 1;
+}
+
+/* ── 分组卡片 ── */
+.mp-section {
+    background-color: var(--unity-colors-box-background);
+    border-width: 1px;
+    border-color: var(--unity-colors-box-border);
+    border-radius: var(--mp-radius);
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.mp-section__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.mp-section__bar {
+    width: 3px;
+    height: 13px;
+    background-color: var(--mp-accent);
+    border-radius: 2px;
+    margin-right: 8px;
+}
+
+.mp-section__title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+}
+
+/* ── 表单行 / 单位 / 摘要 ── */
+.mp-row {
+    flex-direction: row;
+}
+
+.mp-unit {
+    width: 40px;
+    -unity-text-align: middle-left;
+    color: var(--unity-colors-label-text);
+    opacity: 0.6;
+    font-size: 11px;
+    margin-right: 6px;
+}
+
+.mp-summary {
+    flex-direction: row;
+    background-color: var(--mp-accent-soft);
+    border-radius: var(--mp-radius);
+    padding: 6px 10px;
+    margin: 6px 0;
+}
+
+.mp-summary__caption {
+    width: 92px;
+    color: var(--unity-colors-label-text);
+    opacity: 0.7;
+    font-size: 11px;
+}
+
+.mp-summary__value {
+    color: var(--unity-colors-label-text);
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* ── 总览卡片 / 徽标 / 操作条 ── */
+.mp-card {
+    flex-grow: 1;
+    background-color: var(--unity-colors-box-background);
+    border-width: 1px;
+    border-color: var(--unity-colors-box-border);
+    border-radius: var(--mp-radius);
+    padding: 12px;
+    margin-right: 8px;
+    margin-bottom: 8px;
+}
+
+.mp-card__title {
+    font-size: 11px;
+    color: var(--unity-colors-label-text);
+    opacity: 0.6;
+    margin-bottom: 6px;
+}
+
+.mp-card__body {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--unity-colors-label-text);
+    white-space: normal;
+}
+
+.mp-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background-color: var(--mp-accent-soft);
+    color: var(--unity-colors-label-text);
+}
+
+.mp-badge--warn {
+    background-color: rgba(214, 158, 46, 0.22);
+}
+
+.mp-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.mp-action {
+    margin-right: 6px;
+    margin-bottom: 6px;
+}
+
+.mp-action--primary {
+    background-color: var(--mp-accent);
+    color: rgb(255, 255, 255);
+}
+
+.mp-action--primary:hover {
+    background-color: var(--mp-accent-hover);
+}
+
+/* ── 棋盘预览 ── */
+.mp-board {
+    align-self: flex-start;
+    padding: 8px;
+    background-color: var(--unity-colors-box-background);
+    border-width: 1px;
+    border-color: var(--unity-colors-box-border);
+    border-radius: var(--mp-radius);
+}
+
+.mp-cell {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    border-radius: 11px;
+    background-color: rgba(128, 128, 128, 0.18);
+}
+
+.mp-cell--black {
+    background-color: rgb(24, 28, 34);
+}
+
+.mp-cell--white {
+    background-color: rgb(238, 242, 246);
+}
+
+/* ── 字段标签对齐 ── */
+.mp-root .unity-base-field__label {
+    width: 132px;
+    flex-shrink: 0;
+    align-self: center;
+    font-size: 12px;
+}

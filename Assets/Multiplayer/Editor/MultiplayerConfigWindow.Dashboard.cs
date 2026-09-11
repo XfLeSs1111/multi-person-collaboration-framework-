@@ -21,9 +21,14 @@ namespace Socket.Multiplayer.Editor
             }
 
             var issues = MultiplayerConfigEditor.GetValidationIssues(config);
-            page.Add(issues.Count == 0
-                ? MultiplayerInspectorUtility.Info("配置完整，可以启动。")
-                : MultiplayerInspectorUtility.Info($"发现 {issues.Count} 项需要处理，切到“配置检查”页查看明细。", HelpBoxMessageType.Warning));
+            var status = new VisualElement();
+            status.style.flexDirection = FlexDirection.Row;
+            status.style.alignItems = Align.Center;
+            status.style.marginBottom = 8f;
+            status.Add(MultiplayerInspectorUtility.Badge(
+                issues.Count == 0 ? "配置完整，可以启动" : $"{issues.Count} 项需要处理",
+                issues.Count > 0));
+            page.Add(status);
 
             var cards = new VisualElement();
             cards.AddToClassList("mp-actions");
@@ -36,9 +41,12 @@ namespace Socket.Multiplayer.Editor
                     : $"{config.defaultRoomTemplate.templateName}\n{config.defaultRoomTemplate.PlayerSpawnCount} 出生点 / {config.defaultRoomTemplate.InteractableCount} 交互物"));
             page.Add(cards);
 
+            var actionSection = new VisualElement();
+            actionSection.AddToClassList("mp-section");
+            actionSection.Add(MultiplayerInspectorUtility.SectionHeader("快捷操作"));
             var actions = new VisualElement();
             actions.AddToClassList("mp-actions");
-            actions.Add(ActionButton("保存全部", SaveAll));
+            actions.Add(ActionButton("保存全部", SaveAll, true));
             actions.Add(ActionButton("检查配置", ShowValidationDialog));
             actions.Add(ActionButton("房间模板", CreateOrSelectRoomTemplate));
             actions.Add(ActionButton("定位配置", () =>
@@ -47,7 +55,8 @@ namespace Socket.Multiplayer.Editor
                 EditorGUIUtility.PingObject(config);
             }));
             actions.Add(ActionButton("打开启动场景", OpenBootstrapScene));
-            page.Add(actions);
+            actionSection.Add(actions);
+            page.Add(actionSection);
             return page;
         }
 
@@ -64,10 +73,11 @@ namespace Socket.Multiplayer.Editor
             return card;
         }
 
-        private static Button ActionButton(string text, Action callback)
+        private static Button ActionButton(string text, Action callback, bool primary = false)
         {
             var button = new Button(callback) { text = text };
             button.AddToClassList("mp-action");
+            if (primary) button.AddToClassList("mp-action--primary");
             return button;
         }
     }

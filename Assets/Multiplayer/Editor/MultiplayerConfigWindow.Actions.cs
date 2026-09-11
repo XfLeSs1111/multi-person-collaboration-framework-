@@ -58,6 +58,61 @@ namespace Socket.Multiplayer.Editor
             return page;
         }
 
+        private VisualElement BuildAppearance()
+        {
+            var page = new ScrollView { style = { flexGrow = 1 } };
+            page.Add(MultiplayerInspectorUtility.PageTitle("外观"));
+
+            var section = new VisualElement();
+            section.AddToClassList("mp-section");
+            section.Add(MultiplayerInspectorUtility.SectionHeader("主题色"));
+            section.Add(MultiplayerInspectorUtility.Hint(
+                "强调色用于侧边选中项、分区标记条、主按钮与摘要条；底色调与控件样式跟随 Unity 编辑器皮肤（明/暗自动适配）。"));
+
+            var current = MultiplayerThemeSettings.AccentIndex;
+            var swatches = new VisualElement();
+            swatches.AddToClassList("mp-actions");
+            for (var i = 0; i < MultiplayerThemeSettings.Presets.Length; i++)
+            {
+                var index = i;
+                var preset = MultiplayerThemeSettings.Presets[i];
+
+                var cell = new VisualElement();
+                cell.style.flexDirection = FlexDirection.Row;
+                cell.style.alignItems = Align.Center;
+                cell.style.marginRight = 10f;
+                cell.style.marginBottom = 6f;
+
+                var chip = new VisualElement();
+                chip.style.width = 14f;
+                chip.style.height = 14f;
+                chip.style.borderTopLeftRadius = 4f;
+                chip.style.borderTopRightRadius = 4f;
+                chip.style.borderBottomLeftRadius = 4f;
+                chip.style.borderBottomRightRadius = 4f;
+                chip.style.backgroundColor = preset.Swatch;
+                chip.style.marginRight = 6f;
+
+                var button = new Button(() => MultiplayerThemeSettings.AccentIndex = index) { text = preset.Name };
+                button.AddToClassList("mp-action");
+                if (index == current) button.AddToClassList("mp-action--primary");
+
+                cell.Add(chip);
+                cell.Add(button);
+                swatches.Add(cell);
+            }
+            section.Add(swatches);
+
+            var status = new VisualElement();
+            status.style.flexDirection = FlexDirection.Row;
+            status.style.alignItems = Align.Center;
+            status.Add(MultiplayerInspectorUtility.Badge($"当前：{MultiplayerThemeSettings.Presets[current].Name}"));
+            section.Add(status);
+            section.Add(MultiplayerInspectorUtility.Hint("设置保存在本机用户偏好（EditorPrefs），不随工程同步；点击色板即时生效。"));
+            page.Add(section);
+            return page;
+        }
+
         private void SaveAll()
         {
             if (config == null) return;

@@ -8,9 +8,13 @@ namespace Socket.Multiplayer.Editor
 {
     /// <summary>GomokuRuleConfig 的 UI Toolkit 检查器：规则字段 + 可点击棋盘预览（等价旧 Odin 预览）。</summary>
     [CustomEditor(typeof(GomokuRuleConfig))]
-    internal sealed class GomokuRuleConfigEditor : UnityEditor.Editor
+    internal sealed class GomokuRuleConfigEditor : UnityEditor.Editor, IEmbeddedInspector
     {
         private static readonly string[] TabNames = { "棋盘", "对局", "观战", "回放", "预览" };
+
+        private bool embedded;
+
+        public void SetEmbeddedLayout() => embedded = true;
 
         private VisualElement[] panes;
         private VisualElement boardHost;
@@ -27,8 +31,11 @@ namespace Socket.Multiplayer.Editor
             var root = new VisualElement();
             MultiplayerInspectorUtility.ApplySkin(root);
 
-            var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
-            root.Add(tabs.Root);
+            if (!embedded)
+            {
+                var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
+                root.Add(tabs.Root);
+            }
 
             var contentHost = new VisualElement { style = { marginTop = 4 } };
             panes = new VisualElement[TabNames.Length];
@@ -36,6 +43,8 @@ namespace Socket.Multiplayer.Editor
             {
                 panes[i] = new VisualElement();
                 panes[i].AddToClassList("mp-pane");
+                panes[i].AddToClassList("mp-section");
+                if (embedded) panes[i].Add(MultiplayerInspectorUtility.SectionHeader(TabNames[i]));
                 contentHost.Add(panes[i]);
             }
             root.Add(contentHost);
@@ -63,6 +72,7 @@ namespace Socket.Multiplayer.Editor
             panes[4].Add(reset);
 
             root.Bind(serializedObject);
+            MultiplayerInspectorUtility.ApplyLabels(root);
             root.TrackSerializedObjectValue(serializedObject, _ =>
             {
                 RefreshSummary();
@@ -78,7 +88,7 @@ namespace Socket.Multiplayer.Editor
         private void SwitchTab(int active)
         {
             for (var i = 0; i < panes.Length; i++)
-                panes[i].style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
+                panes[i].style.display = embedded || i == active ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void RefreshSummary()

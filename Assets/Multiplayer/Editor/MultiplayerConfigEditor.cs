@@ -10,9 +10,13 @@ namespace Socket.Multiplayer.Editor
 {
     /// <summary>MultiplayerConfig 的 UI Toolkit 检查器：页签分区 + 实时摘要 + 配置检查。</summary>
     [CustomEditor(typeof(MultiplayerConfig))]
-    internal sealed class MultiplayerConfigEditor : UnityEditor.Editor
+    internal sealed class MultiplayerConfigEditor : UnityEditor.Editor, IEmbeddedInspector
     {
         private static readonly string[] TabNames = { "房间", "网络", "场景", "控制", "交互", "界面" };
+
+        private bool embedded;
+
+        public void SetEmbeddedLayout() => embedded = true;
 
         private VisualElement[] panes;
         private VisualElement legacyGroup;
@@ -28,8 +32,11 @@ namespace Socket.Multiplayer.Editor
             var root = new VisualElement();
             MultiplayerInspectorUtility.ApplySkin(root);
 
-            var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
-            root.Add(tabs.Root);
+            if (!embedded)
+            {
+                var tabs = new MultiplayerInspectorUtility.TabBar(TabNames, SwitchTab);
+                root.Add(tabs.Root);
+            }
 
             var contentHost = new VisualElement { style = { marginTop = 4 } };
             panes = new VisualElement[TabNames.Length];
@@ -37,6 +44,8 @@ namespace Socket.Multiplayer.Editor
             {
                 panes[i] = new VisualElement();
                 panes[i].AddToClassList("mp-pane");
+                panes[i].AddToClassList("mp-section");
+                if (embedded) panes[i].Add(MultiplayerInspectorUtility.SectionHeader(TabNames[i]));
                 contentHost.Add(panes[i]);
             }
             root.Add(contentHost);
@@ -52,6 +61,7 @@ namespace Socket.Multiplayer.Editor
             root.Add(validationHost);
 
             root.Bind(serializedObject);
+            MultiplayerInspectorUtility.ApplyLabels(root);
             root.TrackPropertyValue(serializedObject.FindProperty("defaultRoomTemplate"), _ => UpdateLegacyVisibility());
             root.TrackSerializedObjectValue(serializedObject, _ =>
             {
@@ -70,7 +80,7 @@ namespace Socket.Multiplayer.Editor
         private void SwitchTab(int active)
         {
             for (var i = 0; i < panes.Length; i++)
-                panes[i].style.display = i == active ? DisplayStyle.Flex : DisplayStyle.None;
+                panes[i].style.display = embedded || i == active ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void UpdateLegacyVisibility()
@@ -83,7 +93,7 @@ namespace Socket.Multiplayer.Editor
         {
             var so = serializedObject;
 
-            pane.Add(new PropertyField(so.FindProperty("defaultRoomTemplate")));
+            pane.Add(MultiplayerInspectorUtility.Field(so, "defaultRoomTemplate", "默认房间模板"));
 
             legacyGroup = new VisualElement();
             legacyGroup.Add(MultiplayerInspectorUtility.Info("未绑定房间模板时，使用下面的兼容人数与自动排列的出生点。"));
@@ -92,7 +102,7 @@ namespace Socket.Multiplayer.Editor
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxPlayers", "兼容最多人数"), "人")));
             pane.Add(legacyGroup);
 
-            pane.Add(MultiplayerInspectorUtility.Field(so, "roomName"));
+            pane.Add(MultiplayerInspectorUtility.Field(so, "roomName", "房间名称"));
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxRooms", "最大房间数"), "个"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "maxServerPlayers", "服务器最大连接数"), "人"),
@@ -105,7 +115,7 @@ namespace Socket.Multiplayer.Editor
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "roomIdleTimeout", "闲置房回收时间"), "秒"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "reconnectWindow", "断线重连窗口"), "秒")));
             pane.Add(MultiplayerInspectorUtility.Row(
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "落子思考时限"), "秒"),
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "回合思考时限"), "秒"),
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "matchRecordLimit", "保存战绩条数"), "条")));
 
             pane.Add(MultiplayerInspectorUtility.Field(so, "recordReplays", "保存回放数据"));

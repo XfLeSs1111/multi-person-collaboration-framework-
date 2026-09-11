@@ -1,0 +1,6 @@
+/* 主题片段：紫罗兰 */
+.mp-root {
+    --mp-accent: rgb(153, 120, 237);
+    --mp-accent-hover: rgb(172, 143, 245);
+    --mp-accent-soft: rgba(153, 120, 237, 0.18);
+}

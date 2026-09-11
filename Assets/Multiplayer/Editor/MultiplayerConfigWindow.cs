@@ -14,13 +14,13 @@ namespace Socket.Multiplayer.Editor
         private const string ConfigPath = "Assets/MultiplayerGenerated/MultiplayerConfig.asset";
         private const string TemplatePath = "Assets/MultiplayerGenerated/DefaultRoomTemplate.asset";
 
-        private static readonly string[] TabNames = { "总览", "全局配置", "房间模板", "玩法规则", "配置检查" };
+        private static readonly string[] TabNames = { "总览", "全局配置", "房间模板", "玩法规则", "配置检查", "外观" };
 
         [SerializeField] private MultiplayerConfig config;
         [SerializeField] private int activeTab;
 
         private VisualElement contentHost;
-        private MultiplayerInspectorUtility.TabBar tabBar;
+        private Button[] navButtons;
         private UnityEditor.Editor configEditor;
         private UnityEditor.Editor templateEditor;
         private UnityEditor.Editor ruleEditor;
@@ -53,12 +53,38 @@ namespace Socket.Multiplayer.Editor
 
             MultiplayerInspectorUtility.ApplySkin(rootVisualElement);
             rootVisualElement.Clear();
-            tabBar = new MultiplayerInspectorUtility.TabBar(TabNames, SelectTab);
-            rootVisualElement.Add(tabBar.Root);
-            contentHost = new VisualElement { style = { flexGrow = 1 } };
-            contentHost.AddToClassList("mp-pane");
-            rootVisualElement.Add(contentHost);
 
+            var body = new VisualElement();
+            body.style.flexDirection = FlexDirection.Row;
+            body.style.flexGrow = 1f;
+            rootVisualElement.Add(body);
+
+            var nav = new VisualElement();
+            nav.AddToClassList("mp-nav");
+            navButtons = new Button[TabNames.Length];
+            for (var i = 0; i < TabNames.Length; i++)
+            {
+                var index = i;
+                var item = new Button(() => SelectTab(index)) { text = TabNames[i] };
+                item.AddToClassList("mp-nav-item");
+                navButtons[i] = item;
+                nav.Add(item);
+            }
+            body.Add(nav);
+
+            contentHost = new VisualElement { style = { flexGrow = 1 } };
+            body.Add(contentHost);
+
+            SelectTab(activeTab);
+        }
+
+        private void OnEnable() => MultiplayerThemeSettings.Changed += OnThemeChanged;
+
+        private void OnDisable() => MultiplayerThemeSettings.Changed -= OnThemeChanged;
+
+        private void OnThemeChanged()
+        {
+            MultiplayerInspectorUtility.ApplySkin(rootVisualElement);
             SelectTab(activeTab);
         }
 
@@ -67,7 +93,9 @@ namespace Socket.Multiplayer.Editor
         private void SelectTab(int index)
         {
             activeTab = Mathf.Clamp(index, 0, TabNames.Length - 1);
-            if (tabBar != null) tabBar.SetActive(activeTab);
+            if (navButtons != null)
+                for (var i = 0; i < navButtons.Length; i++)
+                    navButtons[i].EnableInClassList("mp-nav-item--active", i == activeTab);
             if (contentHost == null) return;
 
             contentHost.Clear();
@@ -87,8 +115,11 @@ namespace Socket.Multiplayer.Editor
                 case 3:
                     contentHost.Add(BuildRulePage());
                     break;
-                default:
+                case 4:
                     contentHost.Add(BuildValidation());
+                    break;
+                default:
+                    contentHost.Add(BuildAppearance());
                     break;
             }
         }
@@ -111,6 +142,7 @@ namespace Socket.Multiplayer.Editor
                 return host;
             }
 
+            if (editor is IEmbeddedInspector embedded) embedded.SetEmbeddedLayout();
             editor.serializedObject.Update();
             var ui = editor.CreateInspectorGUI();
             if (ui == null)
