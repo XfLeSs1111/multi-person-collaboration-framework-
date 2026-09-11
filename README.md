@@ -1,5 +1,7 @@
 # Socket 多人联机框架
 
+[![CI](https://github.com/XfLeSs1111/multi-person-collaboration-framework-/actions/workflows/ci.yml/badge.svg)](https://github.com/XfLeSs1111/multi-person-collaboration-framework-/actions/workflows/ci.yml)
+
 > 单一物理场景、多房间隔离的 Unity + Mirror 联机框架。房间、对战与配置全部可扩展：**新增玩法 = 一个适配器 + 一份规则资产**。
 >
 > *A Mirror-based multiplayer framework for Unity — one physical scene, many isolated rooms. Adding a new game mode takes one adapter + one rules asset.*
@@ -30,8 +32,9 @@
 - 房间模板可直接编辑出生点与交互物布局；配置检查给出可点击跳转的问题清单
 
 **可测试性**
-- 纯逻辑内核不依赖 Unity：`MatchSession` / `GomokuRules` 等由 dotnet NUnit 直接编译测试（13 用例）
-- Unity EditMode 41 用例；`ci/run-tests.ps1` 一键两层回归；pre-commit 钩子自动跑纯逻辑层
+- 纯逻辑内核不依赖 Unity：`MatchSession` / `GomokuRules` 等由 dotnet NUnit 直接编译测试（18 用例）
+- Unity EditMode 43 用例；`ci/run-tests.ps1` 一键两层回归；pre-commit 钩子自动跑纯逻辑层
+- GitHub Actions 托管 CI 跑纯逻辑层（徽章见顶部）
 
 ## 快速开始
 
@@ -119,9 +122,10 @@ ci/
 .\ci\run-tests.ps1
 ```
 
-- 纯逻辑 13 用例：会话裁决、判负原因、战绩簿、协议签名等
-- Unity EditMode 41 用例：房间注册表、对战框架、战绩与回放
+- 纯逻辑 18 用例：会话裁决、判负原因、座位分配、名字台账与重连凭据、战绩簿、协议签名等
+- Unity EditMode 43 用例：房间注册表、对战框架、战绩与回放
 - `git commit` 时 pre-commit 钩子自动执行纯逻辑层
+- 托管 CI（`.github/workflows/ci.yml`）：推送到 `main` / PR 时在 GitHub runner 上跑纯逻辑层；Unity 层需要本机安装编辑器与许可证，仍走 `ci/run-tests.ps1`
 
 ## 命令行参数
 

@@ -1,0 +1,27 @@
+name: CI
+
+# 托管 runner 只能跑「纯逻辑层」：Unity 编辑器需要安装 + 许可证，所以 EditMode/PlayMode
+# 用例仍由本地 pre-commit 钩子与 ci/run-tests.ps1 负责（Unity 层命令见 README）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pure-logic:
+    name: Pure logic (net9.0 + NUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore ci/PureLogic.Tests/PureLogic.Tests.csproj
+
+      - name: Test
+        run: dotnet test ci/PureLogic.Tests/PureLogic.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"

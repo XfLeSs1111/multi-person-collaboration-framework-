@@ -16,6 +16,8 @@ namespace Socket.Multiplayer.Editor
         private const string ConfigPath = Root + "/MultiplayerConfig.asset";
         private const string RoomTemplatePath = Root + "/DefaultRoomTemplate.asset";
         private const string GomokuConfigPath = Root + "/GomokuRuleConfig.asset";
+        private const string DefaultOfflineScene = SceneRoot + "/Bootstrap.unity";
+        private const string DefaultLobbyScene = SceneRoot + "/Lobby.unity";
 
         [MenuItem("Socket/Multiplayer/Initialize PC Demo")]
         public static void Initialize()
@@ -28,7 +30,8 @@ namespace Socket.Multiplayer.Editor
             var playerPrefab = CreatePlayerPrefab();
             var interactablePrefab = CreateInteractablePrefab(config);
             var gomokuRules = CreateGomokuRuleConfig();
-            config.defaultRoomTemplate = CreateRoomTemplate(interactablePrefab.GetComponent<NetworkInteractable>(), gomokuRules);
+            var roomTemplate = CreateRoomTemplate(interactablePrefab.GetComponent<NetworkInteractable>(), gomokuRules);
+            if (config.defaultRoomTemplate == null) config.defaultRoomTemplate = roomTemplate;
             EditorUtility.SetDirty(config);
             var roomStatePrefab = CreateSimpleNetworkPrefab<NetworkRoomState>("NetworkRoomState");
             var roomChatPrefab = CreateSimpleNetworkPrefab<NetworkRoomChat>("NetworkRoomChat");
@@ -72,28 +75,52 @@ namespace Socket.Multiplayer.Editor
             EditorApplication.Exit(0);
         }
 
+        // 生成器只负责“把新资产喂到可用默认值”：已存在的资产是用户的东西，
+        // 手调过的参数与引用不应被一次重跑悄悄改回去（Initialize 的幂等承诺）。
         private static MultiplayerConfig CreateConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<MultiplayerConfig>(ConfigPath);
-            if (config == null)
+            if (config != null)
             {
-                config = ScriptableObject.CreateInstance<MultiplayerConfig>();
-                AssetDatabase.CreateAsset(config, ConfigPath);
+                var repaired = false;
+                if (string.IsNullOrEmpty(config.offlineScene))
+                {
+                    config.offlineScene = DefaultOfflineScene;
+                    repaired = true;
+                }
+
+                if (string.IsNullOrEmpty(config.lobbyScene))
+                {
+                    config.lobbyScene = DefaultLobbyScene;
+                    repaired = true;
+                }
+
+                if (repaired)
+                {
+                    EditorUtility.SetDirty(config);
+                    Debug.LogWarning("MultiplayerConfig 缺少场景路径，已补回默认值；其余字段保留现状。");
+                }
+
+                return config;
             }
+
+            config = ScriptableObject.CreateInstance<MultiplayerConfig>();
+            AssetDatabase.CreateAsset(config, ConfigPath);
             config.minPlayers = 1;
             config.maxPlayers = 8;
             config.maxRooms = 16;
             config.maxServerPlayers = 64;
             config.maxSpectators = 20;
             config.reconnectWindow = 60f;
+            config.authTimeoutSeconds = 15f;
             config.port = 7777;
             config.sendRate = 30;
             config.defaultStartMode = NetworkStartMode.Manual;
             config.defaultAddress = "localhost";
             config.defaultPlayerName = "Player";
             config.roomName = "Socket PC Room";
-            config.offlineScene = "Assets/MultiplayerGenerated/Scenes/Bootstrap.unity";
-            config.lobbyScene = "Assets/MultiplayerGenerated/Scenes/Lobby.unity";
+            config.offlineScene = DefaultOfflineScene;
+            config.lobbyScene = DefaultLobbyScene;
             config.autoStartWhenAllReady = false;
             config.allowLateJoiners = false;
             config.roomCommandPerSecond = 2f;
@@ -102,7 +129,6 @@ namespace Socket.Multiplayer.Editor
             config.gameCommandPerSecond = 4f;
             config.useLegacyImGuiHud = false;
             config.roomIdleTimeout = 120f;
-            config.reconnectWindow = 60f;
             config.turnTimeoutSeconds = 60f;
             config.matchRecordLimit = 10;
             config.recordReplays = true;
@@ -169,12 +195,10 @@ namespace Socket.Multiplayer.Editor
         private static GomokuRuleConfig CreateGomokuRuleConfig()
         {
             var rules = AssetDatabase.LoadAssetAtPath<GomokuRuleConfig>(GomokuConfigPath);
-            if (rules == null)
-            {
-                rules = ScriptableObject.CreateInstance<GomokuRuleConfig>();
-                AssetDatabase.CreateAsset(rules, GomokuConfigPath);
-            }
+            if (rules != null) return rules;
 
+            rules = ScriptableObject.CreateInstance<GomokuRuleConfig>();
+            AssetDatabase.CreateAsset(rules, GomokuConfigPath);
             rules.boardSize = 15;
             rules.winLength = 5;
             rules.allowDraw = true;
@@ -191,14 +215,15 @@ namespace Socket.Multiplayer.Editor
             {
                 template = ScriptableObject.CreateInstance<RoomTemplate>();
                 AssetDatabase.CreateAsset(template, RoomTemplatePath);
+                template.templateName = "默认房间";
+                template.description = "标准 8 人联机房间";
+                template.minPlayers = 1;
+                template.maxPlayers = 8;
+                template.maxSpectators = 20;
             }
 
-            template.templateName = "默认房间";
-            template.description = "标准 8 人联机房间";
-            template.minPlayers = 1;
-            template.maxPlayers = 8;
-            template.maxSpectators = 20;
-            template.rules = gomokuRules;
+            // 只补空位：规则未挂接时挂上，摆件缺预制体时补上，其余保持用户配置。
+            if (template.rules == null) template.rules = gomokuRules;
             if (template.interactables != null)
                 foreach (var spawn in template.interactables)
                     if (spawn != null && spawn.prefab == null)
@@ -303,11 +328,31 @@ namespace Socket.Multiplayer.Editor
             }
         }
 
+        // 合并而不是替换：演示场景置顶并强制启用，用户自己的场景原样留在后面（含 enabled 状态）。
         private static void ConfigureBuildSettings(params string[] scenes)
         {
-            var buildScenes = new List<EditorBuildSettingsScene>();
-            foreach (var scene in scenes) buildScenes.Add(new EditorBuildSettingsScene(scene, true));
-            EditorBuildSettings.scenes = buildScenes.ToArray();
+            var merged = new List<EditorBuildSettingsScene>();
+            foreach (var scene in scenes) merged.Add(new EditorBuildSettingsScene(scene, true));
+
+            var existing = EditorBuildSettings.scenes;
+            if (existing != null)
+            {
+                foreach (var entry in existing)
+                {
+                    if (entry == null || string.IsNullOrEmpty(entry.path)) continue;
+                    var duplicate = false;
+                    foreach (var kept in merged)
+                    {
+                        if (!string.Equals(kept.path, entry.path, System.StringComparison.OrdinalIgnoreCase)) continue;
+                        duplicate = true;
+                        break;
+                    }
+
+                    if (!duplicate) merged.Add(entry);
+                }
+            }
+
+            EditorBuildSettings.scenes = merged.ToArray();
         }
 
         private static void EnsureFolder(string path)
