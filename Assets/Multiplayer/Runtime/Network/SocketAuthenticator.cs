@@ -18,6 +18,10 @@ namespace Socket.Multiplayer
         /// <summary>本客户端保存的重连凭据：断线重连时附在认证请求里（同进程内有效）。</summary>
         private string resumeToken = string.Empty;
 
+        // 未完成握手的连接：connectionId → 连上来的时刻（P1-10 握手超时）。
+        private readonly Dictionary<int, double> pendingAuthSince = new Dictionary<int, double>();
+        private double nextAuthSweep;
+
         public string ResumeToken => resumeToken;
 
         public string playerName = "Player";
@@ -46,13 +50,79 @@ namespace Socket.Multiplayer
         public override void OnStartServer()
         {
             book = new NameReservationBook();
+            pendingAuthSince.Clear();
             NetworkServer.RegisterHandler<AuthRequestMessage>(OnAuthRequestMessage, false);
+            NetworkServer.OnConnectedEvent += NotePendingConnection;
+            NetworkServer.OnDisconnectedEvent += ForgetPendingConnection;
         }
 
         public override void OnStopServer()
         {
+            NetworkServer.OnConnectedEvent -= NotePendingConnection;
+            NetworkServer.OnDisconnectedEvent -= ForgetPendingConnection;
             NetworkServer.UnregisterHandler<AuthRequestMessage>();
+            pendingAuthSince.Clear();
             book = new NameReservationBook();
+        }
+
+        private void NotePendingConnection(NetworkConnectionToClient conn)
+        {
+            if (conn == null) return;
+            pendingAuthSince[conn.connectionId] = NetworkTime.localTime;
+        }
+
+        private void ForgetPendingConnection(NetworkConnectionToClient conn)
+        {
+            if (conn != null) pendingAuthSince.Remove(conn.connectionId);
+        }
+
+        /// <summary>握手超时秒数：超时未认证的连接直接断开（0 = 不限制）。</summary>
+        private float AuthTimeoutSeconds
+        {
+            get
+            {
+                var manager = NetworkManager.singleton as SocketRoomManager;
+                return manager != null && manager.Config != null ? manager.Config.authTimeoutSeconds : 0f;
+            }
+        }
+
+        // 半开连接看门狗：只占着连接槽不发认证请求的客户端（或恶意探测）不会永久残留。
+        public void Update()
+        {
+            if (!NetworkServer.active) return;
+            var timeout = AuthTimeoutSeconds;
+            if (timeout <= 0f)
+            {
+                if (pendingAuthSince.Count > 0) pendingAuthSince.Clear();
+                return;
+            }
+
+            var now = NetworkTime.localTime;
+            if (now < nextAuthSweep) return;
+            nextAuthSweep = now + 1d;
+
+            List<int> expired = null;
+            foreach (var pair in pendingAuthSince)
+            {
+                if (now - pair.Value < timeout) continue;
+                if (expired == null) expired = new List<int>();
+                expired.Add(pair.Key);
+            }
+            if (expired == null) return;
+
+            foreach (var id in expired)
+            {
+                pendingAuthSince.Remove(id);
+                NetworkConnectionToClient conn;
+                if (!NetworkServer.connections.TryGetValue(id, out conn) || conn == null) continue;
+                conn.Send(new AuthResponseMessage
+                {
+                    success = false,
+                    message = "认证超时：请检查网络后重试。",
+                    errorCode = MultiplayerErrorCode.AuthTimeout
+                });
+                conn.Disconnect();
+            }
         }
 
         public override void OnServerAuthenticate(NetworkConnectionToClient conn) { }
@@ -91,6 +161,7 @@ namespace Socket.Multiplayer
 
             // 签发（并轮换）一次性重连凭据：原客户端会保存它，断线回来后凭它放行。
             var issuedToken = book.Accept(name);
+            pendingAuthSince.Remove(conn.connectionId);
             conn.authenticationData = name;
             conn.Send(new AuthResponseMessage { success = true, message = "认证成功", resumeToken = issuedToken });
             ServerAccept(conn);

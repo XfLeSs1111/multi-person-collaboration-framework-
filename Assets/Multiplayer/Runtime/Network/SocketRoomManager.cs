@@ -783,6 +783,7 @@ namespace Socket.Multiplayer
             {
                 var match = pair.Value;
                 if (match == null || match.Phase != MatchPhase.Active) continue;
+                match.ServerRefreshTurnSeconds();
                 if (match.TurnDeadline <= 0d || now <= match.TurnDeadline) continue;
                 var stableId = match.ServerFindStableIdBySeat(match.CurrentSeat);
                 if (string.IsNullOrEmpty(stableId)) continue;

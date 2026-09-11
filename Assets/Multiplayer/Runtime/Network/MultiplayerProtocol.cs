@@ -31,6 +31,7 @@ namespace Socket.Multiplayer
             Add(ref hash, config.allowLateJoiners.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.autoStartWhenAllReady.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.turnTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.authTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.matchRecordLimit.ToString(CultureInfo.InvariantCulture));
             Add(ref hash, config.recordReplays.ToString(CultureInfo.InvariantCulture));
 

@@ -43,6 +43,9 @@ namespace Socket.Multiplayer
         [Tooltip("玩家掉线后保留其座位与显示名称的时长，期间用同名重连可回到原房间（0 表示关闭重连）。")]
         [Min(0f)] public float reconnectWindow = 60f;
 
+        [Tooltip("服务器等待客户端完成握手认证的秒数：超时未认证的连接会被主动断开（0 表示不限制）。")]
+        [Min(0f)] public float authTimeoutSeconds = 15f;
+
         [Tooltip("单回合思考时间上限：超时由服务器判定当前行动方负（0 表示关闭计时）。")]
         [Min(0f)] public float turnTimeoutSeconds = 60f;
 
@@ -140,6 +143,7 @@ namespace Socket.Multiplayer
             spawnSpacing = Mathf.Max(0.5f, spawnSpacing);
             roomIdleTimeout = Mathf.Max(0f, roomIdleTimeout);
             reconnectWindow = Mathf.Max(0f, reconnectWindow);
+            authTimeoutSeconds = Mathf.Max(0f, authTimeoutSeconds);
             turnTimeoutSeconds = Mathf.Max(0f, turnTimeoutSeconds);
             matchRecordLimit = Mathf.Clamp(matchRecordLimit, 0, 100);
             roomCommandPerSecond = Mathf.Max(0.5f, roomCommandPerSecond);

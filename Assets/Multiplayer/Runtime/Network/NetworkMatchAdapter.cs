@@ -27,7 +27,11 @@ namespace Socket.Multiplayer
     /// </summary>
     public abstract class NetworkMatchAdapter : NetworkBehaviour
     {
-        [SyncVar] private double turnDeadline;
+        // 绝对截止时刻只在服务端判定用：客户端进程的 NetworkTime 基准不同，拿它做减算必然偏。
+        private double turnDeadline;
+        // 同步给客户端的“剩余秒数 + 每次重新计时的代号”；客户端凭代号重锚点后本地插值，读秒才顺滑。
+        [SyncVar] private float turnSecondsRemaining;
+        [SyncVar] private byte turnArmStamp;
         [SyncVar] private MatchEndReason endReason;
         [SyncVar] private MatchForfeitCause forfeitCause;
         [SyncVar] private string endDetail;
@@ -79,16 +83,28 @@ namespace Socket.Multiplayer
         /// <summary>Game-side label for the ending ("五连"/"和棋"); may be empty.</summary>
         public string EndDetail => endDetail ?? string.Empty;
 
-        /// <summary>Server-clock time the current turn expires; 0 when the timer is off.</summary>
+        /// <summary>绝对截止时刻（服务端时钟）；仅服务端判定用，客户端请读 TurnSecondsLeft。</summary>
         public double TurnDeadline => turnDeadline;
+
+        // 客户端插值锚点：最近一次「重新计时」的代号、当时的剩余秒数、收到它的本地时刻。
+        private byte lastSeenTurnArmStamp;
+        private float lastSeenTurnSeconds;
+        private double lastSeenTurnAt;
 
         /// <summary>Seconds left for the current turn (0 when disabled or not running).</summary>
         public double TurnSecondsLeft
         {
             get
             {
-                if (turnDeadline <= 0d || Phase != MatchPhase.Active) return 0d;
-                var left = turnDeadline - NetworkTime.localTime;
+                if (turnArmStamp != lastSeenTurnArmStamp)
+                {
+                    lastSeenTurnArmStamp = turnArmStamp;
+                    lastSeenTurnSeconds = turnSecondsRemaining;
+                    lastSeenTurnAt = NetworkTime.localTime;
+                }
+
+                if (Phase != MatchPhase.Active || lastSeenTurnSeconds <= 0f) return 0d;
+                var left = lastSeenTurnSeconds - (NetworkTime.localTime - lastSeenTurnAt);
                 return left > 0d ? left : 0d;
             }
         }
@@ -189,9 +205,32 @@ namespace Socket.Multiplayer
         protected void ArmTurnDeadline()
         {
             var timeout = TurnTimeoutSeconds;
-            turnDeadline = Phase == MatchPhase.Active && timeout > 0f
-                ? NetworkTime.localTime + timeout
-                : 0d;
+            if (Phase == MatchPhase.Active && timeout > 0f)
+            {
+                turnDeadline = NetworkTime.localTime + timeout;
+                turnSecondsRemaining = timeout;
+            }
+            else
+            {
+                turnDeadline = 0d;
+                turnSecondsRemaining = 0f;
+            }
+
+            turnArmStamp++;
+        }
+
+        /// <summary>服务端每秒心跳：翻新同步给客户端的剩余秒数（值不变时 Mirror 不会发包）。</summary>
+        [Server]
+        public void ServerRefreshTurnSeconds()
+        {
+            if (turnDeadline <= 0d)
+            {
+                if (turnSecondsRemaining != 0f) turnSecondsRemaining = 0f;
+                return;
+            }
+
+            var left = (float)(turnDeadline - NetworkTime.localTime);
+            turnSecondsRemaining = left > 0f ? left : 0f;
         }
 
         [Server]

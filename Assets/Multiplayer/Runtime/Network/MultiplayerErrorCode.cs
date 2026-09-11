@@ -15,6 +15,7 @@ namespace Socket.Multiplayer
         ProtocolMismatch = 101,
         ConfigMismatch = 102,
         NameTaken = 103,
+        AuthTimeout = 104,
 
         // 2xx — room operations
         AlreadyInRoom = 200,

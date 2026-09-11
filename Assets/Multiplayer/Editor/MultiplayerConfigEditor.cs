@@ -115,11 +115,13 @@ namespace Socket.Multiplayer.Editor
 
             pane.Add(MultiplayerInspectorUtility.Row(
                 MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "reconnectWindow", "断线重连窗口"), "秒"),
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "回合思考时限"), "秒")));
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "authTimeoutSeconds", "握手认证超时"), "秒")));
             pane.Add(MultiplayerInspectorUtility.Row(
-                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "matchRecordLimit", "保存战绩条数"), "条"),
-                MultiplayerInspectorUtility.Field(so, "recordReplays", "保存回放数据")));
-            pane.Add(MultiplayerInspectorUtility.Field(so, "autoStartWhenAllReady", "全员准备后自动开始"));
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "turnTimeoutSeconds", "回合思考时限"), "秒"),
+                MultiplayerInspectorUtility.WithUnit(MultiplayerInspectorUtility.Field(so, "matchRecordLimit", "保存战绩条数"), "条")));
+            pane.Add(MultiplayerInspectorUtility.Row(
+                MultiplayerInspectorUtility.Field(so, "recordReplays", "保存回放数据"),
+                MultiplayerInspectorUtility.Field(so, "autoStartWhenAllReady", "全员准备后自动开始")));
             pane.Add(MultiplayerInspectorUtility.Field(so, "allowLateJoiners", "允许中途加入"));
         }
 
