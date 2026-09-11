@@ -19,7 +19,11 @@ namespace Socket.Multiplayer
         public Guid RoomId => GetComponent<NetworkMatch>().matchId;
 
         [Server]
-        public void ServerTryAcquire(NetworkPlayer requester)
+        public void ServerTryAcquire(NetworkPlayer requester) => ServerTryAcquire(requester, Time.time);
+
+        /// <summary>Clock-injectable overload so EditMode tests can drive lease timing.</summary>
+        [Server]
+        internal void ServerTryAcquire(NetworkPlayer requester, float now)
         {
             if (requester == null || requester.IsSpectator || requester.RoomId != RoomId) return;
             var manager = NetworkManager.singleton as SocketRoomManager;
@@ -35,7 +39,7 @@ namespace Socket.Multiplayer
 
             holderNetId = requester.netId;
             toggled = !toggled;
-            _leaseExpiry = Time.time + lease;
+            _leaseExpiry = now + lease;
             if (manager != null && manager.Config != null && manager.Config.interactablesToggleOffAfterUse)
                 activeState = false;
         }
@@ -65,9 +69,13 @@ namespace Socket.Multiplayer
         }
 
         [ServerCallback]
-        private void Update()
+        private void Update() => ServerAdvanceLease(Time.time);
+
+        /// <summary>Lease expiry tick with an explicit clock, drivable from EditMode tests.</summary>
+        [Server]
+        internal void ServerAdvanceLease(float now)
         {
-            if (holderNetId != 0 && _leaseExpiry > 0f && Time.time >= _leaseExpiry)
+            if (holderNetId != 0 && _leaseExpiry > 0f && now >= _leaseExpiry)
                 holderNetId = 0;
         }
 
