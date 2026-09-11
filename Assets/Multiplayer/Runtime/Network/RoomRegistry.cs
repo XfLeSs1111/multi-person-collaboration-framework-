@@ -19,6 +19,8 @@ namespace Socket.Multiplayer
             public bool Ready;
             public bool IsLeader;
             public bool IsSpectator;
+            /// <summary>显式座位（0 起）；-1 = 大厅或观战。座位绑在玩家记录上，不再用成员表下标推导。</summary>
+            public int Seat = -1;
         }
 
         /// <summary>A seat kept warm for a player who dropped inside the reconnect window (M3 P2.19).</summary>
@@ -27,6 +29,8 @@ namespace Socket.Multiplayer
             public string StableId;
             public Guid RoomId;
             public bool IsSpectator;
+            /// <summary>断开时持有的座位；重连时优先恢复（被占用则退回最小空位）。</summary>
+            public int Seat = -1;
             public double ExpiresAt;
         }
 
@@ -134,6 +138,7 @@ namespace Socket.Multiplayer
             room.PlayerIds.Add(connectionId);
             _rooms.Add(room.Id, room);
             AssignPlayer(player, room, true, false);
+            player.Seat = 0;
             return true;
         }
 
@@ -175,7 +180,27 @@ namespace Socket.Multiplayer
 
             room.PlayerIds.Add(connectionId);
             AssignPlayer(player, room, false, false);
+            player.Seat = NextFreeSeat(room);
             return true;
+        }
+
+        /// <summary>该座位是否已被房间成员占用。</summary>
+        private bool IsSeatTaken(Room room, int seat)
+        {
+            foreach (var memberId in room.MemberIds)
+                if (_players.TryGetValue(memberId, out var member) && member.Seat == seat) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// 最小的空闲显式座位；座位不再随其他成员退出而平移（修“换人后座位漂移/永久无法开局”）。
+        /// 返回 -1 表示已按房间容量排满。
+        /// </summary>
+        private int NextFreeSeat(Room room)
+        {
+            for (var seat = 0; seat < room.MaxPlayers; seat++)
+                if (!IsSeatTaken(room, seat)) return seat;
+            return -1;
         }
 
         public bool TryJoinRoomAsSpectator(int connectionId, Guid roomId, int maxSpectators, out Room room, out string error, out MultiplayerErrorCode errorCode)
@@ -429,7 +454,7 @@ namespace Socket.Multiplayer
         }
 
         /// <summary>Remembers where a disconnected player should return (M3 P2.19).</summary>
-        public void RecordPendingSeat(string stableId, Guid roomId, bool isSpectator, double expiresAt)
+        public void RecordPendingSeat(string stableId, Guid roomId, bool isSpectator, double expiresAt, int seat = -1)
         {
             if (string.IsNullOrWhiteSpace(stableId)) return;
             _pendingSeats[stableId] = new PendingSeat
@@ -437,6 +462,7 @@ namespace Socket.Multiplayer
                 StableId = stableId,
                 RoomId = roomId,
                 IsSpectator = isSpectator,
+                Seat = seat,
                 ExpiresAt = expiresAt
             };
         }
@@ -493,7 +519,7 @@ namespace Socket.Multiplayer
         /// lobby check that normal joins require. The returning player rejoins as a regular
         /// member; if the room lost its leader meanwhile, they take it back.
         /// </summary>
-        public bool TryRejoinRoom(int connectionId, Guid roomId, bool isSpectator, out Room room, out MultiplayerErrorCode errorCode)
+        public bool TryRejoinRoom(int connectionId, Guid roomId, bool isSpectator, out Room room, out MultiplayerErrorCode errorCode, int seat = -1)
         {
             room = null;
             errorCode = MultiplayerErrorCode.None;
@@ -518,6 +544,8 @@ namespace Socket.Multiplayer
             room.PlayerIds.Add(connectionId);
             var leader = !room.PlayerIds.Any(id => id != connectionId && _players.TryGetValue(id, out var other) && other.IsLeader);
             AssignPlayer(player, room, leader, false);
+            // 恢复原座位；若已被别人占用（窗口期内新人落座）则退到最小空位。
+            player.Seat = seat >= 0 && !IsSeatTaken(room, seat) ? seat : NextFreeSeat(room);
             return true;
         }
 
@@ -580,6 +608,8 @@ namespace Socket.Multiplayer
             player.Ready = false;
             player.IsLeader = room != null && leader;
             player.IsSpectator = room != null && spectator;
+            // 离开房间或进入观战位都会释放显式座位；落座由调用方随后赋值。
+            if (room == null || spectator) player.Seat = -1;
         }
 
         private void TransferLeader(Room room)

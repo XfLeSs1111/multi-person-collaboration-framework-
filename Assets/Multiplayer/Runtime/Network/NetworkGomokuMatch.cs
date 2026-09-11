@@ -93,18 +93,18 @@ namespace Socket.Multiplayer
         public override bool ServerAddPlayer(string stableId, string displayName, int seatIndex)
         {
             if (session == null) return false;
-            var added = session.AddParticipant(new MatchParticipant(stableId, displayName, seatIndex, MatchParticipantRole.Player));
+            var changed = session.AssignSeat(stableId, displayName, seatIndex);
             SyncSeatRoster();
-            return added;
+            return changed;
         }
 
         [Server]
         public override bool ServerAddSpectator(string stableId, string displayName)
         {
             if (session == null) return false;
-            var added = session.AddParticipant(new MatchParticipant(stableId, displayName, -1, MatchParticipantRole.Spectator));
+            var changed = session.AssignSpectator(stableId, displayName);
             SyncSeatRoster();
-            return added;
+            return changed;
         }
 
         [Server]

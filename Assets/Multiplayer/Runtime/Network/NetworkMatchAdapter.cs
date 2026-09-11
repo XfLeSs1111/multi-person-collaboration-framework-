@@ -210,10 +210,22 @@ namespace Socket.Multiplayer
             endDetail = detail ?? string.Empty;
         }
 
+        /// <summary>名册签名：没变化就不碰 SyncList，避免每秒 Clear+Add 的整表重发。</summary>
+        private string seatsSignature = string.Empty;
+
         /// <summary>Replicates the seat roster; games call it whenever seating changes.</summary>
         [Server]
         protected void SyncSeats(System.Collections.Generic.IEnumerable<MatchSeatInfo> roster)
         {
+            var builder = new System.Text.StringBuilder();
+            if (roster != null)
+                foreach (var entry in roster)
+                    builder.Append(entry.stableId).Append('|').Append(entry.displayName).Append('|').Append(entry.seat).Append(';');
+
+            var signature = builder.ToString();
+            if (signature == seatsSignature) return;
+            seatsSignature = signature;
+
             seats.Clear();
             if (roster == null) return;
             foreach (var entry in roster) seats.Add(entry);

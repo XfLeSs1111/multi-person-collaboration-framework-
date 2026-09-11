@@ -282,6 +282,36 @@ namespace Socket.Multiplayer.Tests
         }
 
         [Test]
+        public void SeatsAreStableAcrossMemberLeaves()
+        {
+            var registry = new RoomRegistry();
+            registry.TryAddPlayer(1, "A", out _);
+            registry.TryAddPlayer(2, "B", out _);
+            registry.TryAddPlayer(3, "C", out _);
+            registry.TryCreateRoom(1, "Room", 8, out var room, out _, out _);
+            registry.TryJoinRoom(2, room.Id, false, out _, out _, out _);
+            registry.TryJoinRoom(3, room.Id, false, out _, out _, out _);
+
+            registry.TryGetPlayer(1, out var a);
+            registry.TryGetPlayer(2, out var b);
+            registry.TryGetPlayer(3, out var c);
+            Assert.AreEqual(0, a.Seat);
+            Assert.AreEqual(1, b.Seat);
+            Assert.AreEqual(2, c.Seat);
+
+            // B 退出后 C 的座位不平移（旧实现用下标推导，C 会被“继承”到 1 号位）。
+            registry.RemovePlayer(2, 0d, out _);
+            registry.TryGetPlayer(3, out c);
+            Assert.AreEqual(2, c.Seat);
+
+            // 空出的 1 号座位仍可被新人使用 → 两人满座，房间可正常开局。
+            registry.TryAddPlayer(4, "D", out _);
+            registry.TryJoinRoom(4, room.Id, false, out _, out _, out _);
+            registry.TryGetPlayer(4, out var d);
+            Assert.AreEqual(1, d.Seat);
+        }
+
+        [Test]
         public void PendingSeatKeepsEmptyRoomAliveUntilExpiry()
         {
             var registry = new RoomRegistry();

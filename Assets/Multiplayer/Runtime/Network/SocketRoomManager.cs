@@ -213,7 +213,7 @@ namespace Socket.Multiplayer
                     _registry.TryGetPlayer(conn.connectionId, out var state) &&
                     state.RoomId != LobbyRoom.Id)
                 {
-                    _registry.RecordPendingSeat(stableId, state.RoomId, state.IsSpectator, now + window);
+                    _registry.RecordPendingSeat(stableId, state.RoomId, state.IsSpectator, now + window, state.Seat);
                     reserved = true;
                 }
 
@@ -265,7 +265,7 @@ namespace Socket.Multiplayer
             // straight back into the old room instead of the lobby.
             if (_registry.TryConsumePendingSeat(name, NetworkTime.localTime, out var seat) &&
                 _registry.TryGetRoom(seat.RoomId, out _) &&
-                _registry.TryRejoinRoom(connection.connectionId, seat.RoomId, seat.IsSpectator, out var rejoinedRoom, out _))
+                _registry.TryRejoinRoom(connection.connectionId, seat.RoomId, seat.IsSpectator, out var rejoinedRoom, out _, seat.Seat))
             {
                 _registry.TouchRoom(rejoinedRoom.Id, NetworkTime.localTime);
                 SyncPlayer(connection);
@@ -582,7 +582,10 @@ namespace Socket.Multiplayer
         {
             if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
             if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
-            var seat = room.PlayerIds.IndexOf(conn.connectionId);
+            // 座位来自注册表的显式绑定（RoomRegistry.Player.Seat），不再用成员表下标推导：
+            // 下标会随其他成员退出而平移，导致观战者突然“继承”座位而内核却仍是观战者。
+            if (!_registry.TryGetPlayer(conn.connectionId, out var registered)) return;
+            var seat = registered.Seat;
             // Past the game's seat count the member watches the duel: without this a 3rd
             // player would silently take seat 2, never get a turn and still look like a
             // player in every client's UI.

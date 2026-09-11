@@ -46,6 +46,45 @@ namespace Socket.Multiplayer
 
         public bool RemoveParticipant(string stableId) => participants.Remove(stableId);
 
+        /// <summary>
+        /// 显式座位绑定：新增落座玩家，或把已有参与者（如观战者）升级为指定座位的玩家。
+        /// 升级会保留原连接状态；对局进行中拒绝角色变更（避免中途插入打乱回合），
+        /// 名册实际发生变化时返回 true。
+        /// </summary>
+        public bool AssignSeat(string stableId, string displayName, int seatIndex)
+        {
+            if (string.IsNullOrEmpty(stableId) || seatIndex < 0) return false;
+            if (participants.TryGetValue(stableId, out var existing))
+            {
+                if (existing.Role == MatchParticipantRole.Player && existing.SeatIndex == seatIndex) return false;
+                if (Phase == MatchPhase.Active) return false;
+                participants[stableId] = CopyWith(existing, MatchParticipantRole.Player, seatIndex);
+                return true;
+            }
+
+            participants[stableId] = new MatchParticipant(stableId, displayName, seatIndex, MatchParticipantRole.Player);
+            return true;
+        }
+
+        /// <summary>
+        /// 观战位分配：只新增观战者，绝不把已有玩家降级（座位释放由房间层决定）。
+        /// 名册实际发生变化时返回 true。
+        /// </summary>
+        public bool AssignSpectator(string stableId, string displayName)
+        {
+            if (string.IsNullOrEmpty(stableId)) return false;
+            if (participants.ContainsKey(stableId)) return false;
+            participants[stableId] = new MatchParticipant(stableId, displayName, -1, MatchParticipantRole.Spectator);
+            return true;
+        }
+
+        private static MatchParticipant CopyWith(MatchParticipant source, MatchParticipantRole role, int seatIndex)
+        {
+            var copy = new MatchParticipant(source.StableId, source.DisplayName, seatIndex, role);
+            if (!source.IsConnected) copy.SetConnected(false);
+            return copy;
+        }
+
         public bool SetParticipantConnection(string stableId, bool connected)
         {
             return participants.TryGetValue(stableId, out var participant) && SetConnection(participant, connected);
