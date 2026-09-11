@@ -1,3 +1,4 @@
+using System;
 using Mirror;
 using UnityEngine;
 
@@ -5,40 +6,71 @@ namespace Socket.Multiplayer
 {
     public sealed class RoomOperations : MonoBehaviour
     {
+        [SerializeField] private SocketRoomManager networkManager;
+
+        private void Awake()
+        {
+            if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
+        }
+
+        public void CreateRoom(string roomName)
+        {
+            Send(ServerRoomOperation.Create, Guid.Empty, roomName);
+        }
+
+        public void CancelRoom()
+        {
+            Send(ServerRoomOperation.Cancel, Guid.Empty, string.Empty);
+        }
+
+        public void JoinRoom(Guid roomId)
+        {
+            Send(ServerRoomOperation.Join, roomId, string.Empty);
+        }
+
+        public void SpectateRoom(Guid roomId)
+        {
+            Send(ServerRoomOperation.JoinAsSpectator, roomId, string.Empty);
+        }
+
+        public void LeaveRoom()
+        {
+            Send(ServerRoomOperation.Leave, Guid.Empty, string.Empty);
+        }
+
         public void ToggleReady()
         {
-            var rp = GetLocalRoomPlayer();
-            if (rp != null) rp.CmdChangeReadyState(!rp.readyToBegin);
+            var local = NetworkClient.localPlayer == null
+                ? null
+                : NetworkClient.localPlayer.GetComponent<NetworkPlayer>();
+            Send(ServerRoomOperation.Ready, Guid.Empty, string.Empty, local == null || !local.IsReady);
         }
 
         public void SetReady(bool value)
         {
-            var rp = GetLocalRoomPlayer();
-            if (rp != null) rp.CmdChangeReadyState(value);
+            Send(ServerRoomOperation.Ready, Guid.Empty, string.Empty, value);
         }
 
         public void StartGame()
         {
-            var local = NetworkClient.localPlayer;
-            if (local != null && local.TryGetComponent<SocketRoomPlayer>(out var rp)) rp.CmdRequestStartGame();
-            else if (local != null && local.TryGetComponent<NetworkPlayer>(out var gp)) gp.CmdRequestStartGame();
+            Send(ServerRoomOperation.Start, Guid.Empty, string.Empty);
         }
 
         public void ReturnToLobby()
         {
-            // Route through the client command even for host (host is also a client in Mirror),
-            // so the server-side leader/phase validation in ServerReturnToLobby is always enforced.
-            var local = NetworkClient.localPlayer;
-            if (local != null && local.TryGetComponent<SocketRoomPlayer>(out var rp)) rp.CmdRequestReturnToLobby();
-            else if (local != null && local.TryGetComponent<NetworkPlayer>(out var gp)) gp.CmdRequestReturnToLobby();
+            Send(ServerRoomOperation.ReturnToLobby, Guid.Empty, string.Empty);
         }
 
-        private static SocketRoomPlayer GetLocalRoomPlayer()
+        private static void Send(ServerRoomOperation operation, Guid roomId, string roomName, bool ready = false)
         {
-            return NetworkClient.localPlayer != null &&
-                   NetworkClient.localPlayer.TryGetComponent<SocketRoomPlayer>(out var rp)
-                ? rp
-                : null;
+            if (!NetworkClient.active) return;
+            NetworkClient.Send(new ServerRoomMessage
+            {
+                serverRoomOperation = operation,
+                roomId = roomId,
+                roomName = roomName,
+                ready = ready
+            });
         }
     }
 }

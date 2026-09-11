@@ -1,12 +1,11 @@
 using UnityEngine;
-using Mirror.Authenticators;
 
 namespace Socket.Multiplayer
 {
     public sealed class NetworkStartup : MonoBehaviour
     {
         [SerializeField] private SocketRoomManager networkManager;
-        [SerializeField] private UniqueNameAuthenticator nameAuthenticator;
+        [SerializeField] private SocketAuthenticator nameAuthenticator;
 
         private void Start()
         {
@@ -16,7 +15,7 @@ namespace Socket.Multiplayer
             var args = System.Environment.GetCommandLineArgs();
 
             if (nameAuthenticator == null)
-                nameAuthenticator = FindFirstObjectByType<UniqueNameAuthenticator>();
+                nameAuthenticator = FindFirstObjectByType<SocketAuthenticator>();
             if (nameAuthenticator != null)
                 nameAuthenticator.playerName = GetValue(args, "-name", networkManager.Config == null ? "Player" : networkManager.Config.defaultPlayerName);
             ClientSessionOptions.PlayerName = GetValue(args, "-name", networkManager.Config == null ? "Player" : networkManager.Config.defaultPlayerName);

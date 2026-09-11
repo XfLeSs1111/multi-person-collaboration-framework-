@@ -12,10 +12,18 @@ namespace Socket.Multiplayer
     }
 
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(NetworkMatch))]
     public sealed class NetworkRoomChat : NetworkBehaviour
     {
         [SerializeField, Min(1)] private int maxMessages = 64;
         public readonly SyncList<RoomChatMessage> messages = new SyncList<RoomChatMessage>();
+        public Guid RoomId => GetComponent<NetworkMatch>().matchId;
+
+        [Server]
+        public void ServerAssignRoom(Guid roomId)
+        {
+            GetComponent<NetworkMatch>().matchId = roomId;
+        }
 
         [Command(requiresAuthority = false)]
         public void CmdSend(string body, NetworkConnectionToClient sender = null)
@@ -25,6 +33,7 @@ namespace Socket.Multiplayer
             if (string.IsNullOrEmpty(body)) return;
 
             var player = sender.identity.GetComponent<NetworkPlayer>();
+            if (player == null || player.RoomId != RoomId) return;
             messages.Add(new RoomChatMessage
             {
                 sender = player == null ? "Player" : player.displayName,

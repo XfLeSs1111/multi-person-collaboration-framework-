@@ -1,0 +1,107 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Socket.Multiplayer
+{
+    /// <summary>
+    /// Network-agnostic authoritative match kernel. Mirror adapters call Submit;
+    /// the kernel owns permissions, rules, phase and confirmed event ordering.
+    /// </summary>
+    public sealed class MatchSession<TState, TCommand, TEvent> : IMatchSnapshotProvider<TState>
+        where TState : class, IMatchState<TState>
+    {
+        private readonly Dictionary<string, MatchParticipant> participants = new Dictionary<string, MatchParticipant>(StringComparer.Ordinal);
+        private readonly List<IMatchEventSink<TEvent>> eventSinks = new List<IMatchEventSink<TEvent>>();
+        private readonly IMatchRules<TState, TCommand, TEvent> rules;
+        private readonly TState state;
+        private int eventSequence;
+
+        public Guid MatchId { get; }
+        public MatchPhase Phase { get; private set; }
+        public TState State => state;
+        public IReadOnlyCollection<MatchParticipant> Participants => participants.Values;
+        public int PlayerCount => participants.Values.Count(item => item.Role == MatchParticipantRole.Player);
+        public event Action<MatchEventRecord<TEvent>> EventConfirmed;
+
+        public MatchSession(Guid matchId, TState state, IMatchRules<TState, TCommand, TEvent> rules)
+        {
+            if (matchId == Guid.Empty) throw new ArgumentException("Match id is required.", nameof(matchId));
+            this.state = state ?? throw new ArgumentNullException(nameof(state));
+            this.rules = rules ?? throw new ArgumentNullException(nameof(rules));
+            MatchId = matchId;
+            Phase = MatchPhase.Waiting;
+        }
+
+        public bool AddParticipant(MatchParticipant participant)
+        {
+            if (participant == null || participants.ContainsKey(participant.StableId)) return false;
+            participants.Add(participant.StableId, participant);
+            return true;
+        }
+
+        public bool RemoveParticipant(string stableId) => participants.Remove(stableId);
+
+        public bool SetParticipantConnection(string stableId, bool connected)
+        {
+            return participants.TryGetValue(stableId, out var participant) && SetConnection(participant, connected);
+        }
+
+        public bool Start()
+        {
+            if (Phase != MatchPhase.Waiting) return false;
+            if (!participants.Values.Any(item => item.Role == MatchParticipantRole.Player)) return false;
+            Phase = MatchPhase.Active;
+            return true;
+        }
+
+        public MatchCommandResult<TEvent> Submit(string stableId, TCommand command, double serverTime)
+        {
+            if (Phase != MatchPhase.Active)
+                return MatchCommandResult<TEvent>.Reject("Match is not active.");
+            if (!participants.TryGetValue(stableId, out var actor))
+                return MatchCommandResult<TEvent>.Reject("Participant is not registered.");
+            if (actor.Role != MatchParticipantRole.Player)
+                return MatchCommandResult<TEvent>.Reject("Only players can submit commands.");
+            if (!actor.IsConnected)
+                return MatchCommandResult<TEvent>.Reject("Participant is disconnected.");
+
+            var result = rules.TryApply(state, actor, command);
+            if (!result.Accepted) return result;
+
+            var record = new MatchEventRecord<TEvent>(++eventSequence, serverTime, result.Event);
+            foreach (var sink in eventSinks.ToArray()) sink.Append(record);
+            EventConfirmed?.Invoke(record);
+            if (rules.IsFinished(state)) Phase = MatchPhase.Completed;
+            return result;
+        }
+
+        public void Cancel()
+        {
+            if (Phase == MatchPhase.Completed) return;
+            Phase = MatchPhase.Cancelled;
+        }
+
+        public void AttachEventSink(IMatchEventSink<TEvent> sink)
+        {
+            if (sink != null && !eventSinks.Contains(sink)) eventSinks.Add(sink);
+        }
+
+        public void DetachEventSink(IMatchEventSink<TEvent> sink) => eventSinks.Remove(sink);
+
+        public TState CreateSnapshot() => state.Clone();
+
+        private static bool SetConnection(MatchParticipant participant, bool connected)
+        {
+            participant.SetConnected(connected);
+            return true;
+        }
+    }
+
+    public sealed class InMemoryMatchEventStore<TEvent> : IMatchEventSink<TEvent>
+    {
+        private readonly List<MatchEventRecord<TEvent>> records = new List<MatchEventRecord<TEvent>>();
+        public IReadOnlyList<MatchEventRecord<TEvent>> Records => records;
+        public void Append(MatchEventRecord<TEvent> record) => records.Add(record);
+    }
+}

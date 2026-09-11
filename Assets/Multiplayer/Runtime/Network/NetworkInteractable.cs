@@ -1,8 +1,10 @@
+using System;
 using Mirror;
 using UnityEngine;
 
 namespace Socket.Multiplayer
 {
+    [RequireComponent(typeof(NetworkMatch))]
     public sealed class NetworkInteractable : NetworkBehaviour
     {
         [SyncVar] private uint holderNetId;
@@ -14,10 +16,12 @@ namespace Socket.Multiplayer
 
         public uint HolderNetId => holderNetId;
         public bool IsToggled => toggled;
+        public Guid RoomId => GetComponent<NetworkMatch>().matchId;
 
         [Server]
         public void ServerTryAcquire(NetworkPlayer requester)
         {
+            if (requester == null || requester.IsSpectator || requester.RoomId != RoomId) return;
             var manager = NetworkManager.singleton as SocketRoomManager;
             var range = manager != null && manager.Config != null ? manager.Config.interactionRange : 3f;
             var lease = manager != null && manager.Config != null ? manager.Config.interactionLeaseSeconds : 10f;

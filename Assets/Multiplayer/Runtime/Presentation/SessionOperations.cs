@@ -1,5 +1,4 @@
 using Mirror;
-using Mirror.Authenticators;
 using UnityEngine;
 
 namespace Socket.Multiplayer
@@ -7,14 +6,14 @@ namespace Socket.Multiplayer
     public sealed class SessionOperations : MonoBehaviour
     {
         [SerializeField] private SocketRoomManager networkManager;
-        [SerializeField] private UniqueNameAuthenticator nameAuthenticator;
+        [SerializeField] private SocketAuthenticator nameAuthenticator;
         [SerializeField] private string serverAddress = "localhost";
         [SerializeField] private string playerName = "Player";
 
         private void Awake()
         {
             if (networkManager == null) networkManager = FindFirstObjectByType<SocketRoomManager>();
-            if (nameAuthenticator == null) nameAuthenticator = FindFirstObjectByType<UniqueNameAuthenticator>();
+            if (nameAuthenticator == null) nameAuthenticator = FindFirstObjectByType<SocketAuthenticator>();
         }
 
         public void SetServerAddress(string value) => serverAddress = value;
@@ -31,7 +30,21 @@ namespace Socket.Multiplayer
         public void StartClient()
         {
             ApplyIdentity();
-            if (networkManager != null) networkManager.StartClient(serverAddress);
+            if (networkManager != null)
+            {
+                // Reset to the configured port: a previous LAN join may have left the
+                // transport on the advertised room's non-default port.
+                networkManager.ApplyPort(networkManager.Config == null ? (ushort)7777 : networkManager.Config.port);
+                networkManager.StartClient(serverAddress);
+            }
+        }
+
+        // Join a room picked from the discovery list; the advertised port is applied
+        // before connecting so non-default-port hosts work.
+        public void JoinRoom(SocketRoomDiscovery.RoomInfo room)
+        {
+            ApplyIdentity();
+            if (networkManager != null) networkManager.StartClient(room);
         }
 
         public void StopSession()

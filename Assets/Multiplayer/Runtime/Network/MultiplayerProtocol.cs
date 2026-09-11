@@ -1,0 +1,88 @@
+using System.Globalization;
+
+namespace Socket.Multiplayer
+{
+    public static class MultiplayerProtocol
+    {
+        public const ushort Version = 3;
+
+        public static string GetConfigSignature(MultiplayerConfig config)
+        {
+            if (config == null) return "NONE";
+
+            var hash = 2166136261u;
+            Add(ref hash, config.roomName);
+            Add(ref hash, config.maxRooms.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.EffectiveMinPlayers.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.EffectiveMaxPlayers.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.maxServerPlayers.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.maxSpectators.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.port.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.sendRate.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.moveSpeed.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.inputSendRate.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.spawnSpacing.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.interactionRange.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.allowLateJoiners.ToString(CultureInfo.InvariantCulture));
+            Add(ref hash, config.autoStartWhenAllReady.ToString(CultureInfo.InvariantCulture));
+
+            var template = config.defaultRoomTemplate;
+            if (template != null)
+            {
+                Add(ref hash, template.templateName);
+                Add(ref hash, template.minPlayers.ToString(CultureInfo.InvariantCulture));
+                Add(ref hash, template.maxPlayers.ToString(CultureInfo.InvariantCulture));
+                Add(ref hash, template.maxSpectators.ToString(CultureInfo.InvariantCulture));
+                if (template.gomokuRules != null)
+                {
+                    Add(ref hash, template.gomokuRules.boardSize.ToString(CultureInfo.InvariantCulture));
+                    Add(ref hash, template.gomokuRules.winLength.ToString(CultureInfo.InvariantCulture));
+                    Add(ref hash, template.gomokuRules.allowSpectators.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (template.playerSpawns != null)
+                    foreach (var spawn in template.playerSpawns)
+                    {
+                        if (spawn == null) continue;
+                        Add(ref hash, spawn.position.x.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.position.y.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.position.z.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.eulerAngles.x.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.eulerAngles.y.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.eulerAngles.z.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                if (template.interactables != null)
+                    foreach (var spawn in template.interactables)
+                    {
+                        if (spawn == null) continue;
+                        Add(ref hash, spawn.prefab == null ? string.Empty : spawn.prefab.name);
+                        Add(ref hash, spawn.position.x.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.position.y.ToString(CultureInfo.InvariantCulture));
+                        Add(ref hash, spawn.position.z.ToString(CultureInfo.InvariantCulture));
+                    }
+            }
+
+            return hash.ToString("X8", CultureInfo.InvariantCulture);
+        }
+
+        private static void Add(ref uint hash, string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                hash ^= 0xff;
+                hash *= 16777619u;
+                return;
+            }
+
+            foreach (var character in value)
+            {
+                hash ^= character;
+                hash *= 16777619u;
+            }
+
+            hash ^= 0xff;
+            hash *= 16777619u;
+        }
+    }
+}

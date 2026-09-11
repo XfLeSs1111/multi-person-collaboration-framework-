@@ -1,29 +1,64 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using Mirror;
 using UnityEngine;
 
 namespace Socket.Multiplayer
 {
+    /// <summary>
+    /// Network adapter for the room domain.
+    ///
+    /// The server stays in one physical scene. RoomRegistry owns room rules and
+    /// NetworkMatch owns visibility. This keeps room state independent from Mirror's
+    /// global NetworkRoomManager scene transition lifecycle.
+    /// </summary>
     [AddComponentMenu("Socket/Network Room Manager")]
-    public sealed class SocketRoomManager : NetworkRoomManager
+    [RequireComponent(typeof(MatchInterestManagement))]
+    [RequireComponent(typeof(SocketNetworkMetrics))]
+    public sealed class SocketRoomManager : NetworkManager
     {
         [SerializeField] private MultiplayerConfig config;
         [SerializeField] private NetworkRoomState roomStatePrefab;
         [SerializeField] private NetworkRoomChat roomChatPrefab;
+        [SerializeField] private NetworkInteractable interactablePrefab;
+        [SerializeField] private NetworkGomokuMatch gomokuMatchPrefab;
+        private SocketNetworkMetrics metrics;
 
-        private NetworkRoomState _roomState;
-        private NetworkRoomChat _roomChat;
+        private RoomRegistry _registry;
+        private readonly Dictionary<Guid, NetworkRoomState> _roomStates = new Dictionary<Guid, NetworkRoomState>();
+        private readonly Dictionary<Guid, NetworkRoomChat> _roomChats = new Dictionary<Guid, NetworkRoomChat>();
+        private readonly Dictionary<Guid, NetworkGomokuMatch> _roomMatches = new Dictionary<Guid, NetworkGomokuMatch>();
+        private readonly Dictionary<Guid, List<NetworkInteractable>> _roomInteractables = new Dictionary<Guid, List<NetworkInteractable>>();
+
+        private readonly List<RoomInfo> _availableRooms = new List<RoomInfo>();
+        private readonly List<PlayerInfo> _currentPlayers = new List<PlayerInfo>();
+        private Guid _localRoomId = LobbyRoom.Id;
+        private RoomPhase _localPhase = RoomPhase.Lobby;
+        private string _localRoomName = string.Empty;
+        private string _lastError = string.Empty;
+        private Guid _pendingRoomId;
+
+        public event Action RoomStateChanged;
 
         public MultiplayerConfig Config => config;
-        public string RoomName => config == null ? "Socket Room" : config.roomName;
-        public int ConnectedPlayerCount => roomSlots.Count;
-        public RoomPhase CurrentPhase => Utils.IsSceneActive(GameplayScene) ? RoomPhase.InGame : RoomPhase.Lobby;
+        public string RoomName => string.IsNullOrWhiteSpace(_localRoomName) ? (config == null ? "Socket Room" : config.roomName) : _localRoomName;
+        public int ConnectedPlayerCount => _registry == null ? numPlayers : _registry.Players.Count();
+        public RoomPhase CurrentPhase => _localPhase;
+        public Guid LocalRoomId => _localRoomId;
+        public IReadOnlyList<RoomInfo> AvailableRooms => _availableRooms;
+        public IReadOnlyList<PlayerInfo> CurrentPlayers => _currentPlayers;
+        public string LastError => _lastError;
+        public SocketNetworkMetrics Metrics => metrics == null ? metrics = GetComponent<SocketNetworkMetrics>() : metrics;
+        public RoomInfo[] GetDiscoveryRooms() => BuildRoomInfos();
+
+        // Kept for old scene/prefab data while the generated assets migrate to M2.
+        [Server]
+        public void ServerEnsureLeader(SocketRoomPlayer joiningPlayer) { }
 
         public override void Awake()
         {
             base.Awake();
-            // PcRoomHud renders the room controls; Mirror's built-in IMGUI room panel is disabled.
-            showRoomGUI = false;
 
             if (config == null)
             {
@@ -31,15 +66,14 @@ namespace Socket.Multiplayer
                 return;
             }
 
-            maxConnections = config.maxPlayers;
-            minPlayers = config.minPlayers;
+            maxConnections = config.ServerConnectionLimit;
             sendRate = config.sendRate;
             networkAddress = config.defaultAddress;
             offlineScene = config.offlineScene;
             onlineScene = config.lobbyScene;
-            RoomScene = config.lobbyScene;
-            GameplayScene = config.gameplayScene;
             ApplyPort(config.port);
+            RegisterTemplatePrefabs();
+            metrics = GetComponent<SocketNetworkMetrics>();
         }
 
         public void ApplyPort(ushort value)
@@ -70,193 +104,752 @@ namespace Socket.Multiplayer
             StartClient();
         }
 
-        // ---- Leader election -------------------------------------------------
-
-        [Server]
-        public void ServerEnsureLeader(SocketRoomPlayer joiningPlayer)
+        public void StartClient(SocketRoomDiscovery.RoomInfo room)
         {
-            if (joiningPlayer == null) return;
-            foreach (var player in roomSlots)
-            {
-                if (player == null) continue;
-                if (player is SocketRoomPlayer roomPlayer && roomPlayer.IsLeader)
-                    return;
-            }
-            joiningPlayer.ServerSetLeader(true);
+            networkAddress = room.address;
+            if (room.port > 0) ApplyPort(room.port);
+            _pendingRoomId = room.roomId;
+            StartClient();
         }
 
-        [Server]
-        private void ServerTransferLeader(SocketRoomPlayer leavingPlayer)
+        [Client]
+        public void ClientJoinPendingRoom()
         {
-            if (leavingPlayer == null || !leavingPlayer.IsLeader) return;
-            leavingPlayer.ServerSetLeader(false);
-            foreach (var player in roomSlots)
+            if (_pendingRoomId == Guid.Empty || !NetworkClient.active || NetworkClient.localPlayer == null) return;
+            NetworkClient.Send(new ServerRoomMessage
             {
-                if (player == null || player == leavingPlayer) continue;
-                if (player is SocketRoomPlayer roomPlayer)
+                serverRoomOperation = ServerRoomOperation.Join,
+                roomId = _pendingRoomId
+            });
+            _pendingRoomId = Guid.Empty;
+        }
+
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            _registry = new RoomRegistry(config == null ? 16 : config.maxRooms);
+            NetworkServer.RegisterHandler<ServerRoomMessage>(OnServerRoomMessage);
+        }
+
+        public override void OnStartClient()
+        {
+            base.OnStartClient();
+            NetworkClient.ReplaceHandler<ClientRoomMessage>(OnClientRoomMessage);
+            ClearClientRoomState();
+        }
+
+        public override void OnStopServer()
+        {
+            foreach (var roomId in _roomStates.Keys.ToArray())
+                DestroyRoomObjects(roomId);
+            _roomStates.Clear();
+            _roomChats.Clear();
+            _roomMatches.Clear();
+            _roomInteractables.Clear();
+            _registry = null;
+            base.OnStopServer();
+        }
+
+        public override void OnStopClient()
+        {
+            ClearClientRoomState();
+            base.OnStopClient();
+        }
+
+        public override void OnServerReady(NetworkConnectionToClient conn)
+        {
+            base.OnServerReady(conn);
+            if (conn != null) SendClientState(conn);
+        }
+
+        public override void OnServerAddPlayer(NetworkConnectionToClient conn)
+        {
+            if (conn == null || playerPrefab == null) return;
+
+            var start = GetStartPosition();
+            var playerObject = start == null
+                ? Instantiate(playerPrefab)
+                : Instantiate(playerPrefab, start.position, start.rotation);
+            playerObject.name = $"{playerPrefab.name} [connId={conn.connectionId}]";
+            NetworkServer.AddPlayerForConnection(conn, playerObject);
+        }
+
+        public override void OnServerDisconnect(NetworkConnectionToClient conn)
+        {
+            if (conn != null && authenticator is SocketAuthenticator socketAuthenticator)
+                socketAuthenticator.ReleaseName(conn.authenticationData as string);
+            var previousRoomId = LobbyRoom.Id;
+            if (_registry != null && conn != null)
+            {
+                _registry.RemovePlayer(conn.connectionId, out previousRoomId);
+                if (previousRoomId != LobbyRoom.Id)
                 {
-                    roomPlayer.ServerSetLeader(true);
-                    return;
+                    if (_registry.TryGetRoom(previousRoomId, out var previousRoom))
+                    {
+                        RemovePlayerFromGomokuMatch(previousRoom, conn);
+                        SyncPlayers(previousRoom);
+                    }
+                    else
+                        DestroyRoomObjects(previousRoomId);
                 }
             }
+
+            base.OnServerDisconnect(conn);
+            RefreshAllRoomObjects();
+            BroadcastClientState();
         }
 
-        // ---- Room flow -------------------------------------------------------
+        [Server]
+        public void RegisterPlayer(NetworkPlayer player)
+        {
+            if (player == null || player.connectionToClient == null) return;
+            if (_registry == null)
+                _registry = new RoomRegistry(config == null ? 16 : config.maxRooms);
+            if (!_registry.TryAddPlayer(
+                    player.connectionToClient.connectionId,
+                    player.connectionToClient.authenticationData as string,
+                    out var state))
+                return;
+
+            var name = state.DisplayName;
+            var color = Color.HSVToRGB((player.netId * 0.17f) % 1f, 0.7f, 0.95f);
+            player.ServerSetIdentity(name, color);
+            player.ServerAssignRoom(LobbyRoom.Id, false, false);
+            BroadcastClientState();
+        }
 
         [Server]
         public void TryStartGame(NetworkConnectionToClient requester)
         {
-            if (requester != null && !Utils.IsSceneActive(RoomScene)) return;
-            if (requester != null)
-            {
-                var leader = FindRoomPlayer(requester);
-                if (leader == null || !leader.IsLeader) return;
-            }
-            var required = config == null ? 1 : Mathf.Max(1, config.minPlayers);
-            if (roomSlots.Count < required) return;
-            if (roomSlots.Any(p => p == null || !p.readyToBegin)) return;
-            ServerChangeScene(GameplayScene);
+            if (_registry == null || requester == null) return;
+            var minimum = GetRequiredMatchPlayers();
+            if (!_registry.TryStartRoom(requester.connectionId, minimum, out var room, out _)) return;
+            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null && !match.ServerStartMatch()) return;
+            SpawnRoomInteractables(room);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.Started, room.Id);
         }
 
         [Server]
         public void ServerReturnToLobby(NetworkConnectionToClient requester)
         {
-            if (requester == null || !Utils.IsSceneActive(GameplayScene)) return;
-            var leader = FindRoomPlayer(requester);
-            if (leader == null || !leader.IsLeader) return;
-            ServerChangeScene(RoomScene);
+            if (_registry == null || requester == null) return;
+            if (!_registry.TryReturnToLobby(requester.connectionId, out var room, out _)) return;
+            DestroyRoomInteractables(room.Id);
+            if (_roomMatches.TryGetValue(room.Id, out var match) && match != null)
+                match.ServerResetMatch();
+            RebindGomokuParticipants(room);
+            SyncPlayers(room);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.ReturnedToLobby, room.Id);
         }
 
         [Server]
-        private SocketRoomPlayer FindRoomPlayer(NetworkConnectionToClient conn)
+        private void OnServerRoomMessage(NetworkConnectionToClient conn, ServerRoomMessage message)
         {
-            if (conn == null) return null;
-            if (conn.identity != null && conn.identity.TryGetComponent<SocketRoomPlayer>(out var identityRoomPlayer))
-                return identityRoomPlayer;
-            foreach (var owned in conn.owned)
-                if (owned != null && owned.TryGetComponent<SocketRoomPlayer>(out var ownedRoomPlayer))
-                    return ownedRoomPlayer;
-            return null;
-        }
+            if (_registry == null || conn == null) return;
+            if (!_registry.TryGetPlayer(conn.connectionId, out _))
+            {
+                SendError(conn, "Player is not ready.");
+                return;
+            }
 
-        // ---- Room state / chat ----------------------------------------------
+            switch (message.serverRoomOperation)
+            {
+                case ServerRoomOperation.Create:
+                    CreateRoom(conn, message.roomName);
+                    break;
+                case ServerRoomOperation.Cancel:
+                    CancelRoom(conn);
+                    break;
+                case ServerRoomOperation.Join:
+                    JoinRoom(conn, message.roomId);
+                    break;
+                case ServerRoomOperation.JoinAsSpectator:
+                    JoinRoomAsSpectator(conn, message.roomId);
+                    break;
+                case ServerRoomOperation.Leave:
+                    LeaveRoom(conn);
+                    break;
+                case ServerRoomOperation.Ready:
+                    SetReady(conn, message.ready);
+                    break;
+                case ServerRoomOperation.Start:
+                    TryStartGame(conn);
+                    break;
+                case ServerRoomOperation.ReturnToLobby:
+                    ServerReturnToLobby(conn);
+                    break;
+                default:
+                    SendError(conn, "Unknown room operation.");
+                    break;
+            }
+        }
 
         [Server]
-        public override void OnRoomStartServer()
+        private void CreateRoom(NetworkConnectionToClient conn, string requestedName)
         {
-            base.OnRoomStartServer();
-            EnsureRoomState();
-            EnsureRoomChat();
-            RefreshRoomState();
+            var name = SanitizeRoomName(requestedName);
+            if (!_registry.TryCreateRoom(conn.connectionId, name, config == null ? maxConnections : config.EffectiveMaxPlayers, out var room, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+
+            SyncPlayers(room);
+            PlacePlayerInRoom(conn, room);
+            EnsureRoomObjects(room);
+            AddPlayerToGomokuMatch(room, conn);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.Created, room.Id);
         }
 
-        public override void OnRoomStopServer()
+        [Server]
+        private void JoinRoom(NetworkConnectionToClient conn, Guid roomId)
         {
-            base.OnRoomStopServer();
-            _roomState = null;
-            _roomChat = null;
+            if (_registry.TryGetRoom(roomId, out var existingRoom) && existingRoom.Phase != RoomPhase.Lobby && HasGomokuMatch())
+            {
+                JoinRoomAsSpectator(conn, roomId);
+                return;
+            }
+
+            var allowLateJoiners = config != null && config.allowLateJoiners;
+            if (!_registry.TryJoinRoom(conn.connectionId, roomId, allowLateJoiners, out var room, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+
+            SyncPlayers(room);
+            PlacePlayerInRoom(conn, room);
+            EnsureRoomObjects(room);
+            AddPlayerToGomokuMatch(room, conn);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.Joined, room.Id);
         }
 
-        public override void OnRoomServerDisconnect(NetworkConnectionToClient conn)
+        [Server]
+        private void LeaveRoom(NetworkConnectionToClient conn)
         {
-            // NOTE: the base OnServerDisconnect already removed the leaving player from
-            // roomSlots before this hook runs, so resolve the room player from the
-            // connection's owned objects (KeepAuthority keeps the room player owned).
-            var roomPlayer = FindRoomPlayer(conn);
-            if (roomPlayer != null) ServerTransferLeader(roomPlayer);
-            base.OnRoomServerDisconnect(conn);
-            RefreshRoomState();
+            if (!_registry.TryLeaveRoom(conn.connectionId, out var roomId, out var roomRemoved, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+
+            if (roomRemoved) DestroyRoomObjects(roomId);
+            else
+            {
+                RemovePlayerFromGomokuMatch(roomId, conn);
+                SyncPlayers(roomId);
+                RefreshRoom(roomId);
+            }
+            SyncPlayer(conn);
+            PlacePlayerInLobby(conn);
+            BroadcastClientState(ClientRoomOperation.Departed, roomId);
         }
 
-        public override GameObject OnRoomServerCreateGamePlayer(NetworkConnectionToClient conn, GameObject roomPlayer)
+        [Server]
+        private void JoinRoomAsSpectator(NetworkConnectionToClient conn, Guid roomId)
         {
+            var template = config == null ? null : config.defaultRoomTemplate;
+            var maxSpectators = template == null ? config == null ? 20 : config.maxSpectators : template.maxSpectators;
+            var gomokuRules = template == null ? null : template.gomokuRules;
+            if (gomokuRules != null && !gomokuRules.allowSpectators)
+            {
+                SendError(conn, "This room does not allow spectators.");
+                return;
+            }
+            if (!_registry.TryJoinRoomAsSpectator(conn.connectionId, roomId, maxSpectators, out var room, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+
+            SyncPlayer(conn);
+            EnsureRoomObjects(room);
+            AddSpectatorToGomokuMatch(room, conn);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.Joined, room.Id);
+        }
+
+        [Server]
+        private void CancelRoom(NetworkConnectionToClient conn)
+        {
+            if (!_registry.TryCancelRoom(conn.connectionId, out var roomId, out var affectedPlayers, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+
+            DestroyRoomObjects(roomId);
+            foreach (var connectionId in affectedPlayers)
+                if (NetworkServer.connections.TryGetValue(connectionId, out var affectedConnection))
+                {
+                    RemovePlayerFromGomokuMatch(roomId, affectedConnection);
+                    SyncPlayer(affectedConnection);
+                    PlacePlayerInLobby(affectedConnection);
+                }
+            BroadcastClientState(ClientRoomOperation.Cancelled, roomId);
+        }
+
+        [Server]
+        private void SetReady(NetworkConnectionToClient conn, bool value)
+        {
+            if (!_registry.TrySetReady(conn.connectionId, value, out var room, out var error))
+            {
+                SendError(conn, error);
+                return;
+            }
+            SyncPlayers(room);
+            RefreshRoom(room.Id);
+            BroadcastClientState(ClientRoomOperation.UpdateRoom, room.Id);
+
+            if (config != null && config.autoStartWhenAllReady && room.PlayerIds.All(id => _registry.TryGetPlayer(id, out var player) && player.Ready))
+            {
+                var leaderId = room.PlayerIds.FirstOrDefault(id => _registry.TryGetPlayer(id, out var player) && player.IsLeader);
+                if (NetworkServer.connections.TryGetValue(leaderId, out var leaderConnection))
+                    TryStartGame(leaderConnection);
+            }
+        }
+
+        [Server]
+        private void SyncPlayers(RoomRegistry.Room room)
+        {
+            if (room == null) return;
+            foreach (var connectionId in room.MemberIds)
+                if (NetworkServer.connections.TryGetValue(connectionId, out var conn))
+                    SyncPlayer(conn);
+        }
+
+        [Server]
+        private void SyncPlayers(Guid roomId)
+        {
+            if (_registry != null && _registry.TryGetRoom(roomId, out var room))
+                SyncPlayers(room);
+        }
+
+        [Server]
+        private void SyncPlayer(NetworkConnectionToClient conn)
+        {
+            if (conn == null || conn.identity == null || _registry == null) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            if (!_registry.TryGetPlayer(conn.connectionId, out var state)) return;
+            player.ServerAssignRoom(state.RoomId, state.IsLeader, state.Ready, state.IsSpectator);
+        }
+
+        [Server]
+        private void EnsureRoomObjects(RoomRegistry.Room room)
+        {
+            if (room == null) return;
+            if (!_roomStates.ContainsKey(room.Id) && roomStatePrefab != null)
+            {
+                var stateObject = Instantiate(roomStatePrefab.gameObject);
+                var state = stateObject.GetComponent<NetworkRoomState>();
+                state.ServerAssignRoom(room.Id);
+                NetworkServer.Spawn(stateObject);
+                _roomStates.Add(room.Id, state);
+            }
+
+            if (!_roomChats.ContainsKey(room.Id) && roomChatPrefab != null)
+            {
+                var chatObject = Instantiate(roomChatPrefab.gameObject);
+                var chat = chatObject.GetComponent<NetworkRoomChat>();
+                chat.ServerAssignRoom(room.Id);
+                NetworkServer.Spawn(chatObject);
+                _roomChats.Add(room.Id, chat);
+            }
+
+            EnsureGomokuMatch(room);
+        }
+
+        [Server]
+        private void EnsureGomokuMatch(RoomRegistry.Room room)
+        {
+            if (room == null || _roomMatches.ContainsKey(room.Id) || gomokuMatchPrefab == null) return;
+            var template = config == null ? null : config.defaultRoomTemplate;
+            var gomokuRules = template == null ? null : template.gomokuRules;
+            if (gomokuRules == null) return;
+
+            var matchObject = Instantiate(gomokuMatchPrefab.gameObject);
+            var match = matchObject.GetComponent<NetworkGomokuMatch>();
+            match.ServerInitialize(room.Id, gomokuRules.CreateRuleset());
+            NetworkServer.Spawn(matchObject);
+            _roomMatches.Add(room.Id, match);
+        }
+
+        [Server]
+        private void AddPlayerToGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        {
+            if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            match.ServerAddPlayer(player.StableId, player.displayName, room.PlayerIds.IndexOf(conn.connectionId));
+        }
+
+        [Server]
+        private void AddSpectatorToGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        {
+            if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            match.ServerAddSpectator(player.StableId, player.displayName);
+        }
+
+        [Server]
+        private void RebindGomokuParticipants(RoomRegistry.Room room)
+        {
+            if (room == null) return;
+            foreach (var connectionId in room.PlayerIds)
+                if (NetworkServer.connections.TryGetValue(connectionId, out var connection))
+                    AddPlayerToGomokuMatch(room, connection);
+            foreach (var connectionId in room.SpectatorIds)
+                if (NetworkServer.connections.TryGetValue(connectionId, out var connection))
+                    AddSpectatorToGomokuMatch(room, connection);
+        }
+
+        [Server]
+        private void RemovePlayerFromGomokuMatch(RoomRegistry.Room room, NetworkConnectionToClient conn)
+        {
+            if (room == null || conn == null || conn.identity == null || !_roomMatches.TryGetValue(room.Id, out var match)) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            match.ServerRemoveParticipant(player.StableId);
+        }
+
+        [Server]
+        private void RemovePlayerFromGomokuMatch(Guid roomId, NetworkConnectionToClient conn)
+        {
+            if (_registry != null && _registry.TryGetRoom(roomId, out var room))
+                RemovePlayerFromGomokuMatch(room, conn);
+        }
+
+        private int GetRequiredMatchPlayers()
+        {
+            var configuredMinimum = config == null ? 1 : config.EffectiveMinPlayers;
+            var template = config == null ? null : config.defaultRoomTemplate;
+            return template != null && template.gomokuRules != null
+                ? Math.Max(2, configuredMinimum)
+                : configuredMinimum;
+        }
+
+        private int GetMaxSpectators()
+        {
+            var template = config == null ? null : config.defaultRoomTemplate;
+            return template == null ? config == null ? 20 : config.maxSpectators : template.maxSpectators;
+        }
+
+        private bool HasGomokuMatch()
+        {
+            var template = config == null ? null : config.defaultRoomTemplate;
+            return template != null && template.gomokuRules != null;
+        }
+
+        [Server]
+        private void SpawnRoomInteractables(RoomRegistry.Room room)
+        {
+            if (room == null || _roomInteractables.ContainsKey(room.Id)) return;
+
+            var templateSpawns = config != null && config.defaultRoomTemplate != null
+                ? config.defaultRoomTemplate.interactables
+                : null;
+            if ((templateSpawns == null || templateSpawns.Length == 0) && interactablePrefab == null)
+            {
+                Debug.LogWarning("SocketRoomManager has no interactablePrefab; room started without interactables.", this);
+                return;
+            }
+
+            var instances = new List<NetworkInteractable>();
+            if (templateSpawns != null && templateSpawns.Length > 0)
+            {
+                foreach (var spawn in templateSpawns)
+                {
+                    if (spawn == null) continue;
+                    var prefab = spawn.prefab == null ? interactablePrefab : spawn.prefab;
+                    SpawnRoomInteractable(room.Id, prefab, spawn.position, Quaternion.Euler(spawn.eulerAngles), instances);
+                }
+            }
+            else
+                for (var i = 0; i < 3; i++)
+                    SpawnRoomInteractable(room.Id, interactablePrefab, new Vector3(i * 2f - 2f, 0.4f, 2f), Quaternion.identity, instances);
+
+            _roomInteractables.Add(room.Id, instances);
+        }
+
+        private static void SpawnRoomInteractable(
+            Guid roomId,
+            NetworkInteractable prefab,
+            Vector3 position,
+            Quaternion rotation,
+            ICollection<NetworkInteractable> instances)
+        {
+            if (prefab == null) return;
+            var instanceObject = Instantiate(prefab.gameObject, position, rotation);
+            var networkMatch = instanceObject.GetComponent<NetworkMatch>();
+            if (networkMatch != null) networkMatch.matchId = roomId;
+            var instance = instanceObject.GetComponent<NetworkInteractable>();
+            if (instance != null) instances.Add(instance);
+            NetworkServer.Spawn(instanceObject);
+        }
+
+        [Server]
+        private void PlacePlayerInRoom(NetworkConnectionToClient conn, RoomRegistry.Room room)
+        {
+            var template = config == null ? null : config.defaultRoomTemplate;
+            if (template == null || conn == null || room == null || conn.identity == null) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
+            var playerIndex = room.PlayerIds.IndexOf(conn.connectionId);
+            player.ServerTeleport(template.GetPlayerSpawnPose(playerIndex, config.spawnSpacing));
+        }
+
+        [Server]
+        private void PlacePlayerInLobby(NetworkConnectionToClient conn)
+        {
+            if (conn == null || conn.identity == null) return;
+            if (!conn.identity.TryGetComponent<NetworkPlayer>(out var player)) return;
             var start = GetStartPosition();
-            if (start != null) return Instantiate(playerPrefab, start.position, start.rotation);
-            var index = roomSlots.Count;
-            var spacing = config == null ? 2f : config.spawnSpacing;
-            return Instantiate(playerPrefab, new Vector3(index * spacing, 0f, 0f), Quaternion.identity);
+            var pose = start == null
+                ? new Pose(Vector3.zero, Quaternion.identity)
+                : new Pose(start.position, start.rotation);
+            player.ServerTeleport(pose);
         }
 
-        public override bool OnRoomServerSceneLoadedForPlayer(NetworkConnectionToClient conn, GameObject roomPlayer, GameObject gamePlayer)
+        private void RegisterTemplatePrefabs()
         {
-            if (roomPlayer == null || gamePlayer == null) return false;
-            var rp = roomPlayer.GetComponent<SocketRoomPlayer>();
-            var gp = gamePlayer.GetComponent<NetworkPlayer>();
-            if (rp != null && gp != null) gp.SetIdentity(rp.DisplayName, rp.DisplayColor, rp.IsLeader);
-            return true;
-        }
+            var spawns = config == null || config.defaultRoomTemplate == null
+                ? null
+                : config.defaultRoomTemplate.interactables;
+            if (spawns == null) return;
 
-        public override void OnRoomServerSceneChanged(string sceneName)
-        {
-            base.OnRoomServerSceneChanged(sceneName);
-            EnsureRoomState();
-            EnsureRoomChat();
-            if (sceneName == RoomScene)
+            foreach (var spawn in spawns)
             {
-                // Returning to the lobby: release any interaction lease held by the game players.
-                foreach (var interactable in FindObjectsByType<NetworkInteractable>(FindObjectsSortMode.None))
-                    interactable.ServerReset();
+                if (spawn == null || spawn.prefab == null) continue;
+                var prefabObject = spawn.prefab.gameObject;
+                if (!spawnPrefabs.Contains(prefabObject)) spawnPrefabs.Add(prefabObject);
             }
-            RefreshRoomState();
-        }
-
-        // Auto-start is driven from ReadyStatusChanged (fires on EVERY ready-state change)
-        // rather than the base's allPlayersReady false->true flip, which calls back only
-        // once: any single declined TryStartGame would permanently deadlock auto-start.
-        public override void ReadyStatusChanged()
-        {
-            // Maintain the base's allPlayersReady bookkeeping. Its flip then invokes the
-            // suppressed OnRoomServerPlayersReady below (no-op), so no double-start.
-            base.ReadyStatusChanged();
-            if (config != null && config.autoStartWhenAllReady && Utils.IsSceneActive(RoomScene))
-                TryStartGame(null);
-        }
-
-        public override void OnRoomServerPlayersReady()
-        {
-            // Suppress the base default (ServerChangeScene(GameplayScene)) and the flip-only
-            // path; auto-start is self-counted in ReadyStatusChanged instead.
-        }
-
-        // ---- State/chat lifecycle helpers ------------------------------------
-
-        [Server]
-        private void RefreshRoomState()
-        {
-            EnsureRoomState();
-            if (_roomState != null) _roomState.ServerRefresh(this);
         }
 
         [Server]
-        private void EnsureRoomState()
+        private void DestroyRoomInteractables(Guid roomId)
         {
-            if (_roomState == null) _roomState = FindFirstObjectByType<NetworkRoomState>();
-            if (_roomState != null) return;
-            if (roomStatePrefab == null)
-            {
-                Debug.LogError("SocketRoomManager: roomStatePrefab is not assigned.", this);
-                return;
-            }
-            var stateObject = Instantiate(roomStatePrefab.gameObject);
-            DontDestroyOnLoad(stateObject);
-            _roomState = stateObject.GetComponent<NetworkRoomState>();
-            NetworkServer.Spawn(stateObject);
+            if (!_roomInteractables.TryGetValue(roomId, out var instances)) return;
+            foreach (var interactable in instances)
+                if (interactable != null) NetworkServer.Destroy(interactable.gameObject);
+            _roomInteractables.Remove(roomId);
         }
 
         [Server]
-        private void EnsureRoomChat()
+        private void DestroyRoomObjects(Guid roomId)
         {
-            if (_roomChat == null) _roomChat = FindFirstObjectByType<NetworkRoomChat>();
-            if (_roomChat != null) return;
-            if (roomChatPrefab == null)
+            DestroyRoomInteractables(roomId);
+            if (_roomStates.TryGetValue(roomId, out var state) && state != null)
+                NetworkServer.Destroy(state.gameObject);
+            if (_roomChats.TryGetValue(roomId, out var chat) && chat != null)
+                NetworkServer.Destroy(chat.gameObject);
+            _roomStates.Remove(roomId);
+            _roomChats.Remove(roomId);
+            if (_roomMatches.TryGetValue(roomId, out var match) && match != null)
+                NetworkServer.Destroy(match.gameObject);
+            _roomMatches.Remove(roomId);
+        }
+
+        [Server]
+        private void RefreshRoom(Guid roomId)
+        {
+            if (_registry == null || !_registry.TryGetRoom(roomId, out var room)) return;
+            EnsureRoomObjects(room);
+            if (_roomStates.TryGetValue(roomId, out var state) && state != null)
+                state.ServerRefresh(room);
+        }
+
+        [Server]
+        private void RefreshAllRoomObjects()
+        {
+            if (_registry == null) return;
+            foreach (var room in _registry.Rooms.ToArray())
+                RefreshRoom(room.Id);
+        }
+
+        [Server]
+        private void BroadcastClientState(ClientRoomOperation operation = ClientRoomOperation.List, Guid focusRoomId = default)
+        {
+            if (_registry == null) return;
+            foreach (var conn in NetworkServer.connections.Values)
             {
-                Debug.LogError("SocketRoomManager: roomChatPrefab is not assigned.", this);
-                return;
+                if (conn == null || !_registry.TryGetPlayer(conn.connectionId, out var player)) continue;
+                RoomRegistry.Room room = null;
+                var isInRoom = player.RoomId != LobbyRoom.Id && _registry.TryGetRoom(player.RoomId, out room);
+                if (isInRoom)
+                {
+                    var currentOperation = player.RoomId == focusRoomId ? operation : ClientRoomOperation.UpdateRoom;
+                    conn.Send(new ClientRoomMessage
+                    {
+                        clientRoomOperation = currentOperation,
+                        roomId = room.Id,
+                        phase = room.Phase,
+                        error = string.Empty,
+                        roomInfos = BuildRoomInfos(),
+                        playerInfos = BuildPlayerInfos(room)
+                    });
+                }
+                else
+                {
+                    conn.Send(new ClientRoomMessage
+                    {
+                        clientRoomOperation = operation == ClientRoomOperation.Error
+                            ? ClientRoomOperation.Error
+                            : ClientRoomOperation.List,
+                        roomId = LobbyRoom.Id,
+                        phase = RoomPhase.Lobby,
+                        error = string.Empty,
+                        roomInfos = BuildRoomInfos(),
+                        playerInfos = Array.Empty<PlayerInfo>()
+                    });
+                }
             }
-            var chatObject = Instantiate(roomChatPrefab.gameObject);
-            DontDestroyOnLoad(chatObject);
-            _roomChat = chatObject.GetComponent<NetworkRoomChat>();
-            NetworkServer.Spawn(chatObject);
+        }
+
+        [Server]
+        private void SendClientState(NetworkConnectionToClient conn)
+        {
+            if (_registry == null || conn == null || !_registry.TryGetPlayer(conn.connectionId, out var player)) return;
+            if (player.RoomId != LobbyRoom.Id && _registry.TryGetRoom(player.RoomId, out var room))
+            {
+                conn.Send(new ClientRoomMessage
+                {
+                    clientRoomOperation = ClientRoomOperation.UpdateRoom,
+                    roomId = room.Id,
+                    phase = room.Phase,
+                    error = string.Empty,
+                    roomInfos = BuildRoomInfos(),
+                    playerInfos = BuildPlayerInfos(room)
+                });
+            }
+            else
+            {
+                conn.Send(new ClientRoomMessage
+                {
+                    clientRoomOperation = ClientRoomOperation.List,
+                    roomId = LobbyRoom.Id,
+                    phase = RoomPhase.Lobby,
+                    error = string.Empty,
+                    roomInfos = BuildRoomInfos(),
+                    playerInfos = Array.Empty<PlayerInfo>()
+                });
+            }
+        }
+
+        [Server]
+        private void SendError(NetworkConnectionToClient conn, string error)
+        {
+            if (conn == null) return;
+
+            var roomId = LobbyRoom.Id;
+            var phase = RoomPhase.Lobby;
+            var playerInfos = Array.Empty<PlayerInfo>();
+
+            if (_registry != null &&
+                _registry.TryGetPlayer(conn.connectionId, out var player) &&
+                player.RoomId != LobbyRoom.Id &&
+                _registry.TryGetRoom(player.RoomId, out var room))
+            {
+                roomId = room.Id;
+                phase = room.Phase;
+                playerInfos = BuildPlayerInfos(room);
+            }
+
+            conn.Send(new ClientRoomMessage
+            {
+                clientRoomOperation = ClientRoomOperation.Error,
+                roomId = roomId,
+                phase = phase,
+                error = error,
+                roomInfos = BuildRoomInfos(),
+                playerInfos = playerInfos
+            });
+            Debug.LogWarning($"Room operation rejected: {error}", this);
+        }
+
+        private RoomInfo[] BuildRoomInfos()
+        {
+            if (_registry == null) return Array.Empty<RoomInfo>();
+            return _registry.Rooms
+                .OrderBy(room => room.Name)
+                .Select(room => new RoomInfo
+                {
+                    roomId = room.Id,
+                    roomName = room.Name,
+                    playerCount = room.PlayerIds.Count,
+                    maxPlayers = room.MaxPlayers,
+                    phase = room.Phase,
+                    spectatorCount = room.SpectatorCount,
+                    maxSpectators = GetMaxSpectators()
+                })
+                .ToArray();
+        }
+
+        private PlayerInfo[] BuildPlayerInfos(RoomRegistry.Room room)
+        {
+            if (room == null || _registry == null) return Array.Empty<PlayerInfo>();
+            return room.MemberIds
+                .Where(id => _registry.TryGetPlayer(id, out _))
+                .Select(id =>
+                {
+                    var player = _registry.Players.First(item => item.ConnectionId == id);
+                    return new PlayerInfo
+                    {
+                        playerIndex = player.PlayerIndex,
+                        displayName = player.DisplayName,
+                        displayColor = GetPlayerColor(id),
+                        ready = player.Ready,
+                        isLeader = player.IsLeader,
+                        isSpectator = player.IsSpectator,
+                        roomId = room.Id
+                    };
+                })
+                .ToArray();
+        }
+
+        private Color32 GetPlayerColor(int connectionId)
+        {
+            if (NetworkServer.connections.TryGetValue(connectionId, out var conn) &&
+                conn.identity != null &&
+                conn.identity.TryGetComponent<NetworkPlayer>(out var player))
+                return player.displayColor;
+            return Color.white;
+        }
+
+        private void OnClientRoomMessage(ClientRoomMessage message)
+        {
+            _availableRooms.Clear();
+            if (message.roomInfos != null) _availableRooms.AddRange(message.roomInfos);
+            _currentPlayers.Clear();
+            if (message.playerInfos != null) _currentPlayers.AddRange(message.playerInfos);
+            _localRoomId = message.roomId == Guid.Empty ? LobbyRoom.Id : message.roomId;
+            _localPhase = message.phase;
+            _lastError = message.error ?? string.Empty;
+            _localRoomName = _availableRooms
+                .Where(room => room.roomId == _localRoomId)
+                .Select(room => room.roomName)
+                .FirstOrDefault() ?? string.Empty;
+            if (_localRoomId == LobbyRoom.Id) ClientJoinPendingRoom();
+            RoomStateChanged?.Invoke();
+        }
+
+        private void ClearClientRoomState()
+        {
+            _availableRooms.Clear();
+            _currentPlayers.Clear();
+            _localRoomId = LobbyRoom.Id;
+            _localPhase = RoomPhase.Lobby;
+            _localRoomName = string.Empty;
+            _lastError = string.Empty;
+            _pendingRoomId = Guid.Empty;
+            RoomStateChanged?.Invoke();
+        }
+
+        private static string SanitizeRoomName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "Socket Room";
+            value = value.Trim();
+            return value.Length <= 32 ? value : value.Substring(0, 32);
         }
     }
 }
